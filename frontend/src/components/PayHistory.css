@@ -1,0 +1,59 @@
+/* PayHistory.css */
+.pay-history-container {
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+  font-family: Arial, sans-serif;
+}
+
+h1 {
+  text-align: center;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.pay-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  background-color: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.pay-history-table th,
+.pay-history-table td {
+  padding: 12px 15px;
+  text-align: left;
+}
+
+.pay-history-table th {
+  background-color: #007bff;
+  color: white;
+  font-weight: bold;
+}
+
+.pay-history-table tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.pay-history-table tr:hover {
+  background-color: #f1f1f1;
+}
+
+.back-button {
+  display: block;
+  margin: 20px auto;
+  padding: 10px 20px;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.back-button:hover {
+  background-color: #5a6268;
+}
