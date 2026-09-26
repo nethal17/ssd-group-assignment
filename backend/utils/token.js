@@ -13,7 +13,9 @@ export const signAccessToken = (user) => {
     const payload = {
         sub: user._id.toString(),
         id: user._id.toString(),
-        role: user.role
+        role: user.role,
+        // Session generation; authMiddleware rejects tokens whose tv no longer matches the user
+        tv: user.tokenVersion || 0
     };
 
     const options = {

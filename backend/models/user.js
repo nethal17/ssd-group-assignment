@@ -7,6 +7,7 @@ const SECRET_FIELDS = [
     "resetPasswordToken",
     "resetPasswordExpire",
     "verificationToken",
+    "verificationTokenExpire",
     "twoStepVerificationCode",
     "twoStepVerificationExpire",
     "twoStepVerificationAttempts",
@@ -17,7 +18,8 @@ const SECRET_FIELDS = [
 // Never serialised, even when a document was loaded with the secrets selected.
 // loginHistory holds IP addresses and device fingerprints; it is only exposed
 // through the dedicated /login-history endpoint.
-const NON_SERIALISABLE_FIELDS = [...SECRET_FIELDS, "loginHistory", "__v"];
+// tokenVersion is internal session-revocation state.
+const NON_SERIALISABLE_FIELDS = [...SECRET_FIELDS, "tokenVersion", "loginHistory", "__v"];
 
 const UserSchema = new mongoose.Schema({
 
@@ -31,6 +33,7 @@ const UserSchema = new mongoose.Schema({
     resetPasswordExpire: { type: Date, select: false },
     isVerified: { type: Boolean, default: false },
     verificationToken: { type: String, select: false },
+    verificationTokenExpire: { type: Date, select: false },
     twoStepVerificationCode: { type: String, select: false },
     twoStepVerificationExpire: { type: Date, select: false },
     twoStepVerificationAttempts: { type: Number, default: 0, select: false },
@@ -43,9 +46,16 @@ const UserSchema = new mongoose.Schema({
         deviceInfo: String,
         status: { type: String, enum: ["success", "failed"], required: true }
     }],
-    lastSecurityUpdate: { type: Date, default: null }
+    lastSecurityUpdate: { type: Date, default: null },
+    // Embedded in every access token as "tv"; incrementing it revokes all existing sessions.
+    // Selected by default so every token-issuing path has it (never serialised - see above).
+    tokenVersion: { type: Number, default: 0 }
 
 }, { timestamps: true });
+
+// Reset and verification links are looked up by the SHA-256 hash of their token
+UserSchema.index({ resetPasswordToken: 1 }, { sparse: true });
+UserSchema.index({ verificationToken: 1 }, { sparse: true });
 
 // Defence in depth: res.json() calls toJSON(), so a raw user document can
 // never carry secrets out of the API even if a controller forgets to project.

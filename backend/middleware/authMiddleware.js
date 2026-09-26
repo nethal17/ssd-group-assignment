@@ -40,9 +40,14 @@ export const authMiddleware = async (req, res, next) => {
         }
 
         // Re-hydrate user from DB so role updates and deactivations take effect immediately
-        const user = await User.findById(userId).select("role email isVerified name");
+        const user = await User.findById(userId).select("role email isVerified name tokenVersion");
         if (!user) {
             return res.status(401).json({ msg: "User no longer exists or authorization revoked" });
+        }
+
+        // A password reset bumps tokenVersion, revoking every session issued before it
+        if ((decoded.tv || 0) !== (user.tokenVersion || 0)) {
+            return res.status(401).json({ msg: "Your password was changed. Please log in again." });
         }
 
         // Consistent contract for req.user across all controllers and middlewares
