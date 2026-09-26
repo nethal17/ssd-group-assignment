@@ -5,6 +5,7 @@ import { authorizeRoles } from "../middleware/roleMiddleware.js";
 import { requireSelfOrAdmin } from "../middleware/ownership.js";
 import { forgotPassword, resetPassword, changePassword} from "../controllers/authController.js";
 import { getUsers, getUserById, updateUserDetails, deleteUser } from "../controllers/authController.js";
+import { startGoogleLogin } from "../controllers/oauthController.js";
 
 const router = express.Router();
 
@@ -16,6 +17,9 @@ router.post("/logout", logoutUser);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password/:token", resetPassword);
 router.get("/verify-email/:token", verifyEmail);
+
+// OIDC federated login - public, because this is how you get a token
+router.get("/google", startGoogleLogin);
 
 // Own account only. This router sits above the global gate, so authMiddleware
 // is added per route here.
