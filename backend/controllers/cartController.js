@@ -1,9 +1,29 @@
 import Cart from "../models/Cart.js";
+import {
+  DELIVERY_COST_PER_ITEM,
+  findSellableListing,
+  parseQuantity,
+  repriceCart,
+} from "../utils/cartPricing.js";
 
 //  Insert Item to cart
 export const addToCart = async (req, res) => {
   try {
-    const { userId, wasteId, farmerId, description, price, deliveryCost, quantity, productImage } = req.body;
+    // Only userId, wasteId and quantity are read. price, deliveryCost,
+    // farmerId, description and productImage are ignored if sent - they all
+    // come from the listing, or a buyer could name their own price.
+    const { userId, wasteId, quantity } = req.body;
+
+    const qty = parseQuantity(quantity);
+    if (qty === null) {
+      return res.status(400).json({ error: "Quantity must be a positive whole number" });
+    }
+
+    const listing = await findSellableListing(wasteId);
+    if (!listing) {
+      return res.status(404).json({ error: "Item not found or not available" });
+    }
+
     let cart = await Cart.findOne({ userId });
 
     if (!cart) {
@@ -11,16 +31,22 @@ export const addToCart = async (req, res) => {
     }
 
     // Check if item exists
-    const itemIndex = cart.items.findIndex(item => item.wasteId.toString() === wasteId);
+    const itemIndex = cart.items.findIndex(item => item.wasteId.toString() === listing._id.toString());
     if (itemIndex > -1) {
-      cart.items[itemIndex].quantity += quantity;
+      cart.items[itemIndex].quantity += qty;
     } else {
-      cart.items.push({ wasteId, farmerId, description, price, quantity, deliveryCost, productImage});
+      cart.items.push({
+        wasteId: listing._id,
+        farmerId: listing.farmerId,
+        description: listing.wasteItem || listing.description,
+        price: listing.price,
+        quantity: qty,
+        deliveryCost: DELIVERY_COST_PER_ITEM,
+        productImage: listing.image || undefined,
+      });
     }
-    cart.totalPrice = cart.items.reduce(
-      (total, item) => total + item.price * item.quantity + item.deliveryCost,
-      0
-    );
+
+    await repriceCart(cart);
     await cart.save();
     res.status(200).json(cart);
   } catch (error) {
@@ -49,6 +75,10 @@ export const updateCartItem = async (req, res) => {
     if (!userId || !wasteId || quantity === undefined) {
       return res.status(400).json({ error: "Missing required fields" });
     }
+    const qty = parseQuantity(quantity);
+    if (qty === null) {
+      return res.status(400).json({ error: "Quantity must be a positive whole number" });
+    }
     const cart = await Cart.findOne({ userId });
     if (!cart) {
       return res.status(404).json({ message: "Cart not found" });
@@ -59,13 +89,10 @@ export const updateCartItem = async (req, res) => {
     if (itemIndex === -1) {
       return res.status(404).json({ message: "Item not found in cart" });
     }
-    cart.items[itemIndex].quantity = quantity;
+    cart.items[itemIndex].quantity = qty;
 
-    //Recalculate total price
-    cart.totalPrice = cart.items.reduce(
-      (total, item) => total + item.price * item.quantity + item.deliveryCost,
-      0
-    );
+    //Recalculate total price from the listings, not from stored numbers
+    await repriceCart(cart);
 
     await cart.save();
 
@@ -73,7 +100,7 @@ export const updateCartItem = async (req, res) => {
     res.status(200).json(cart);
   } catch (error) {
     console.error("Error updating cart item:", error);
-    res.status(500).json({ error: "Failed to update item quantity", details: error.message });
+    res.status(500).json({ error: "Failed to update item quantity", details: "An internal server error occurred" });
   }
 };
 
@@ -86,10 +113,7 @@ export const removeCartItem = async (req, res) => {
     if (!cart) return res.status(404).json({ message: "Cart not found" });
     cart.items = cart.items.filter(item => item.wasteId.toString() !== wasteId);
 
-    cart.totalPrice = cart.items.reduce(
-      (total, item) => total + item.price * item.quantity + item.deliveryCost,
-      0
-    );
+    await repriceCart(cart);
 
     await cart.save();
     res.status(200).json(cart);

@@ -1,33 +1,31 @@
 import Stripe from 'stripe';
 import dotenv from 'dotenv';
+import { logger } from '../utils/logger.js';
 
 dotenv.config();
-console.log('Stripe Secret Key:', process.env.STRIPE_SECRET_KEY);
+
+// Removed the plain console.log of STRIPE_SECRET_KEY
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const createCheckoutSession = async (req, res) => {
-  console.log('Received request body:', req.body);
+  // Redacted payload logging
+  logger.info({ body: req.body }, 'Received createCheckoutSession request');
+  
   const { totalSalary, driverId, driverName } = req.body;
 
   // Validate inputs
   if (!totalSalary || !driverId || !driverName) {
-    console.log('Missing fields:', { totalSalary, driverId, driverName });
+    logger.warn({ driverId, driverName }, 'Missing required fields for checkout session');
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
   if (isNaN(totalSalary) || totalSalary <= 0) {
-    console.log('Invalid amount:', totalSalary);
+    logger.warn({ driverId }, 'Invalid amount for checkout session');
     return res.status(400).json({ error: 'Invalid amount' });
   }
 
   try {
-    console.log('Creating Stripe session with:', {
-      totalSalary,
-      driverId,
-      driverName,
-      currency: 'lkr',
-      amount: Math.round(totalSalary * 100)
-    });
+    logger.info({ driverId }, 'Creating Stripe session');
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -53,10 +51,10 @@ export const createCheckoutSession = async (req, res) => {
       },
     });
 
-    console.log('Stripe session created:', session.id);
+    logger.info({ sessionId: session.id }, 'Stripe session created successfully');
     res.json({ url: session.url });
   } catch (error) {
-    console.error('Stripe error:', error);
+    logger.error(error, 'Stripe error during checkout session creation');
     res.status(500).json({ 
       error: 'Failed to create payment session',
       details: error.message 

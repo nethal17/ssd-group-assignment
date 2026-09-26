@@ -2,12 +2,20 @@ import { User } from "../models/user.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import nodemailer from "nodemailer";
+import { signAccessToken } from "../utils/token.js";
+import { USER_SAFE_FIELDS, toUserDTO, toAdminUserSummary } from "../utils/userSerializer.js";
 
 export const blacklistedTokens = new Set();
 
+// 2FA state is select:false on the model; verifyTwoStepCode must opt in to read it
+const TWO_FACTOR_FIELDS =
+    "+twoStepVerificationCode +twoStepVerificationExpire +twoStepVerificationAttempts +mfaTicket +mfaTicketExpire";
+
 export const generateVerificationCode = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    // Cryptographically secure 6-digit random code (100000 - 999999)
+    return crypto.randomInt(100000, 1000000).toString();
 };
 
 export const sendVerificationCode = async (email, code) => {
@@ -203,19 +211,22 @@ export const loginUser = async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        const user = await User.findOne({ email });
+        // password is select:false - opt in only where it is compared
+        const user = await User.findOne({ email }).select("+password");
         if (!user) {
-            // Track failed login attempt
-            const failedUser = await User.findOne({ email });
-            if (failedUser) {
-                failedUser.loginHistory.push({
-                    ipAddress: req.ip,
-                    deviceInfo: req.headers['user-agent'],
-                    status: "failed"
-                });
-                await failedUser.save();
-            }
             return res.status(400).json({ msg: "Invalid credentials" });
+        }
+
+        // Progressive account lockout: check for 5+ failed attempts in the last 15 minutes
+        const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+        const recentFailedAttempts = (user.loginHistory || []).filter(entry => 
+            entry.status === "failed" && new Date(entry.timestamp) > fifteenMinutesAgo
+        );
+
+        if (recentFailedAttempts.length >= 5) {
+            return res.status(429).json({ 
+                msg: "Account temporarily locked due to multiple failed login attempts. Please try again after 15 minutes." 
+            });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
@@ -224,9 +235,17 @@ export const loginUser = async (req, res) => {
             user.loginHistory.push({
                 ipAddress: req.ip,
                 deviceInfo: req.headers['user-agent'],
-                status: "failed"
+                status: "failed",
+                timestamp: new Date()
             });
             await user.save();
+
+            if (recentFailedAttempts.length + 1 >= 5) {
+                return res.status(429).json({ 
+                    msg: "Account temporarily locked due to multiple failed login attempts. Please try again after 15 minutes." 
+                });
+            }
+
             return res.status(400).json({ msg: "Invalid credentials" });
         }
 
@@ -236,15 +255,26 @@ export const loginUser = async (req, res) => {
 
         // If 2FA is enabled, generate and send verification code
         if (user.twoFactorEnabled) {
-            const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-            user.twoStepVerificationCode = verificationCode;
+            const verificationCode = generateVerificationCode();
+            
+            // Hash the 2FA code with bcrypt to protect it at rest in MongoDB
+            const salt = await bcrypt.genSalt(10);
+            user.twoStepVerificationCode = await bcrypt.hash(verificationCode, salt);
             user.twoStepVerificationExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+            user.twoStepVerificationAttempts = 0; // Reset attempts
+
+            // Issue a cryptographically random, single-use mfaTicket bound to this login session
+            const rawMfaTicket = crypto.randomBytes(32).toString("hex");
+            user.mfaTicket = crypto.createHash("sha256").update(rawMfaTicket).digest("hex");
+            user.mfaTicketExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+
             await user.save();
 
             await sendVerificationCode(user.email, verificationCode);
             
             return res.json({ 
                 requiresVerification: true,
+                mfaTicket: rawMfaTicket,
                 msg: "Verification code sent to your email"
             });
         }
@@ -257,8 +287,7 @@ export const loginUser = async (req, res) => {
         });
         await user.save();
 
-        // role goes in the token - the role checks read it off req.user
-        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" });
+        const token = signAccessToken(user);
         
         // Send complete user data in response
         res.json({ 
@@ -433,78 +462,153 @@ export const resetPassword = async (req, res) => {
 };
 
 export const verifyTwoStepCode = async (req, res) => {
-    const { email, code } = req.body;
+    const { email, userId, code, mfaTicket } = req.body;
+
+    if (!code || (!email && !userId && !mfaTicket)) {
+        return res.status(400).json({ msg: "Invalid or expired verification session" });
+    }
 
     try {
-        const user = await User.findOne({ email });
-
-        if (!user) {
-            return res.status(404).json({ msg: "User not found" });
+        let user;
+        // Prioritize resolving user by single-use mfaTicket
+        if (mfaTicket) {
+            const hashedTicket = crypto.createHash("sha256").update(mfaTicket).digest("hex");
+            user = await User.findOne({
+                mfaTicket: hashedTicket,
+                mfaTicketExpire: { $gt: Date.now() }
+            }).select(TWO_FACTOR_FIELDS);
         }
 
-        if (
-            user.twoStepVerificationCode === code &&
-            user.twoStepVerificationExpire > Date.now()
-        ) {
+        // Fallback to email or userId if ticket was not provided
+        if (!user && (email || userId)) {
+            const query = email ? User.findOne({ email }) : User.findById(userId);
+            user = await query.select(TWO_FACTOR_FIELDS);
+        }
+
+        // Generic error response to prevent account enumeration
+        if (!user) {
+            return res.status(400).json({ msg: "Invalid or expired verification code" });
+        }
+
+        // Check if code has expired
+        if (!user.twoStepVerificationCode || !user.twoStepVerificationExpire || user.twoStepVerificationExpire <= Date.now()) {
             user.twoStepVerificationCode = undefined;
             user.twoStepVerificationExpire = undefined;
+            user.mfaTicket = undefined;
+            user.mfaTicketExpire = undefined;
+            user.twoStepVerificationAttempts = 0;
             await user.save();
-
-            const token = jwt.sign(
-                { id: user._id, role: user.role },
-                process.env.JWT_SECRET,
-                { expiresIn: "1d" }
-            );
-
-            // Return a single response with all necessary data
-            res.json({ 
-                token, 
-                user: { 
-                    _id: user._id,
-                    name: user.name, 
-                    email: user.email, 
-                    phone: user.phone,
-                    role: user.role,
-                    profilePic: user.profilePic,
-                    isVerified: user.isVerified,
-                    twoFactorEnabled: user.twoFactorEnabled,
-                    createdAt: user.createdAt
-                } 
-            });
-
-            user.isVerified = true;
-            await user.save();
-
-        } else {
-            res.status(400).json({ msg: "Invalid or expired verification code" });
+            return res.status(400).json({ msg: "Invalid or expired verification code" });
         }
+
+        // Check if attempt limit has already been reached (capped at 5 attempts)
+        if ((user.twoStepVerificationAttempts || 0) >= 5) {
+            user.twoStepVerificationCode = undefined;
+            user.twoStepVerificationExpire = undefined;
+            user.mfaTicket = undefined;
+            user.mfaTicketExpire = undefined;
+            user.twoStepVerificationAttempts = 0;
+            await user.save();
+            return res.status(400).json({ msg: "Too many failed attempts. Verification code has been invalidated." });
+        }
+
+        // Compare supplied code against stored bcrypt hash
+        const isMatch = await bcrypt.compare(String(code).trim(), user.twoStepVerificationCode);
+
+        if (!isMatch) {
+            user.twoStepVerificationAttempts = (user.twoStepVerificationAttempts || 0) + 1;
+
+            if (user.twoStepVerificationAttempts >= 5) {
+                // Burn the code immediately upon reaching 5 failed attempts
+                user.twoStepVerificationCode = undefined;
+                user.twoStepVerificationExpire = undefined;
+                user.mfaTicket = undefined;
+                user.mfaTicketExpire = undefined;
+                user.twoStepVerificationAttempts = 0;
+                await user.save();
+                return res.status(400).json({ msg: "Too many failed attempts. Verification code has been invalidated." });
+            }
+
+            await user.save();
+            return res.status(400).json({ 
+                msg: "Invalid or expired verification code",
+                attemptsRemaining: 5 - user.twoStepVerificationAttempts
+            });
+        }
+
+        // Success: burn 2FA code and mfaTicket immediately to prevent reuse
+        user.twoStepVerificationCode = undefined;
+        user.twoStepVerificationExpire = undefined;
+        user.mfaTicket = undefined;
+        user.mfaTicketExpire = undefined;
+        user.twoStepVerificationAttempts = 0;
+        user.isVerified = true;
+
+        user.loginHistory.push({
+            ipAddress: req.ip,
+            deviceInfo: req.headers['user-agent'],
+            status: "success"
+        });
+        await user.save();
+
+        const token = signAccessToken(user);
+
+        return res.json({ 
+            token, 
+            user: { 
+                _id: user._id,
+                name: user.name, 
+                email: user.email, 
+                phone: user.phone,
+                role: user.role,
+                profilePic: user.profilePic,
+                isVerified: user.isVerified,
+                twoFactorEnabled: user.twoFactorEnabled,
+                createdAt: user.createdAt
+            } 
+        });
+
     } catch (err) {
-        console.log(err);
-        res.status(500).json({ msg: "Server Error" });
+        console.error("2FA Verification Error:", err);
+        return res.status(500).json({ msg: "Server Error" });
     }
 };
 
+
 export const getUsers = async (req, res) => {
     try {
-        const users = await User.find({});
-        res.status(200).json({ count: users.length, data: users });
+        // Project at the DB: only safe fields plus what lastLogin needs (no IPs)
+        const users = await User.find({})
+            .select(`${USER_SAFE_FIELDS} loginHistory.timestamp loginHistory.deviceInfo loginHistory.status`)
+            .lean();
+
+        const data = users.map(toAdminUserSummary);
+        res.status(200).json({ count: data.length, data });
 
     } catch (err) {
         console.log(err);
-        res.status(500).json({ message: err.message });
+        res.status(500).json({ message: "An internal server error occurred" });
     }
 };
 
 export const getUserById = async (req, res) => {
     const { id } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: "Invalid user id" });
+    }
+
     try {
-        const user = await User.findById(id);
-        res.status(200).json(user);
+        const user = await User.findById(id).select(USER_SAFE_FIELDS).lean();
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        res.status(200).json(toUserDTO(user));
 
     } catch (err) {
         console.log(err);
-        res.status(500).json({ message: err.message });
+        res.status(500).json({ message: "An internal server error occurred" });
     }
 };
 
@@ -527,17 +631,21 @@ export const updateUserDetails = async (req, res) => {
             return res.status(400).json({ message: "Phone must be 10 digits starting with 0" });
         }
 
+        // V8 keeps email out of the update; V11's allow-list projection decides
+        // what comes back. updatedData is gone - only name and phone are writable.
         const result = await User.findByIdAndUpdate(
             id,
             { name: name.trim(), phone },
             { new: true, runValidators: true }
-        ).select("-password -resetPasswordToken -verificationToken -twoStepVerificationCode");
+        )
+            .select(USER_SAFE_FIELDS)
+            .lean();
 
         if (!result) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        res.status(200).json({ message: "User updated successfully", user: result });
+        res.status(200).json({ message: "User updated successfully", user: toUserDTO(result) });
 
     } catch (err) {
         console.error("Error updating user:", err);
@@ -564,11 +672,11 @@ export const updateSecurityTimestamp = async (req, res) => {
 };
 
 export const changePassword = async (req, res) => {
-    const { id } = req.params;
+    const { userId } = req.params;
     const { currentPassword, newPassword, confirmNewPassword } = req.body;
 
     try {
-        const user = await User.findById(id);
+        const user = await User.findById(userId).select("+password");
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
@@ -722,7 +830,7 @@ export const deleteUser = async (req, res) => {
 
     } catch (err) {
         console.error("Error in deleteUser:", err);
-        res.status(500).json({ message: err.message });
+        res.status(500).json({ message: "An internal server error occurred" });
     }
 };
 

@@ -98,7 +98,7 @@ export const addReview = async (req, res) => {
     res.status(201).json({ message: 'Review submitted successfully.', review: newReview });
   } catch (error) {
     console.error('Error adding review:', error);
-    res.status(500).json({ message: 'Failed to submit review.', error: error.message });
+    res.status(500).json({ message: 'Failed to submit review.', error: "An internal server error occurred" });
   }
 };
 
@@ -217,7 +217,7 @@ export const publishReview = async (req, res) => {
 
     res.status(200).json({ message: 'Review published successfully.' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -238,7 +238,7 @@ export const getPendingReviews = async (req, res) => {
     res.status(200).json(pendingReviews);
   
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -270,7 +270,7 @@ export const getTopRandomReviews = async (req, res) => {
     const reviews = await Review.aggregate(pipeline);
     res.status(200).json(reviews);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -278,10 +278,10 @@ export const getTopRandomReviews = async (req, res) => {
 export const getPublishedReviews = async (req, res) => {
   try {
     const { productId } = req.params;
-    const publishedReviews = await Review.find({ productId, status: 'published' }).populate('buyerId');
+    const publishedReviews = await Review.find({ productId, status: 'published' }).populate('buyerId', 'name');
     res.status(200).json(publishedReviews);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -299,7 +299,7 @@ export const getFarmerAverageRating = async (req, res) => {
 
     res.status(200).json({ averageRating });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -313,7 +313,7 @@ export const deleteReview = async (req, res) => {
 
     res.status(200).json({ message: 'Review deleted successfully.' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -340,7 +340,7 @@ export const getReviewDetails = async (req, res) => {
 
     res.status(200).json(review);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -378,6 +378,6 @@ export const getFarmerReviews = async (req, res) => {
     res.status(200).json(reviews);
 
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };

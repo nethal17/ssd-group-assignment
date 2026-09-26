@@ -6,7 +6,7 @@ import {
     getDeliveryById, 
     updateDeliveryStatus,
     getDeliveriesByUserId
-} from "../controllers/deliveryController.js";
+} from "../controllers/DeliveryController.js";
 
 const router = express.Router();
 

@@ -8,7 +8,7 @@ import {
   getWasteByCategory,
   getWasteDetailsByCategory,
   getWasteDetailsByType
-} from '../controllers/marketPlaceController.js';
+} from '../controllers/MarketPlaceController.js';
 
 const router = express.Router();
 

@@ -3,7 +3,7 @@ import { apiService } from '../utils/api';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-export const TwoStepVerification = ({ email }) => {
+export const TwoStepVerification = ({ email, mfaTicket }) => {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -13,10 +13,10 @@ export const TwoStepVerification = ({ email }) => {
     try {
       setLoading(true);
       
-      // server looks up the account by email now
       const response = await apiService.post('/api/auth/verify-two-step-code', {
         email,
-        code
+        code,
+        mfaTicket
       });
       
       if (response.data.token) {

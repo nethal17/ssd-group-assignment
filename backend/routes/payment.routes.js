@@ -3,6 +3,7 @@ import { createPayment, getAllPayments } from '../controllers/payment.controller
 import Stripe from 'stripe';
 import Cart from '../models/Cart.js';
 import Order from '../models/Order.js';
+import { repriceCart } from '../utils/cartPricing.js';
 
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -14,10 +15,48 @@ router.get('/payments', getAllPayments);
 // Add new Stripe route with a distinct name
 router.post('/stripe/checkout', async (req, res) => {
   try {
-    const { userId, cartId, line_items, currency, success_url, cancel_url, customerEmail } = req.body;
+    // line_items from the body are ignored. A client that can set unit_amount
+    // can pay whatever it likes, so the charge is built from the stored cart.
+    const { userId, cartId, currency, success_url, cancel_url, customerEmail } = req.body;
 
-    if (!line_items || line_items.length === 0) {
+    const cart = await Cart.findOne({ userId });
+    if (!cart || cart.items.length === 0) {
       return res.status(400).json({ error: 'No items in cart' });
+    }
+
+    await repriceCart(cart);
+    await cart.save();
+
+    if (cart.items.length === 0) {
+      return res.status(400).json({ error: 'No items in cart' });
+    }
+
+    const stripeCurrency = (currency || 'lkr').toLowerCase();
+
+    const line_items = cart.items.map(item => ({
+      price_data: {
+        currency: stripeCurrency,
+        product_data: {
+          name: item.description || 'Product'
+        },
+        unit_amount: Math.round(item.price * 100), // Convert to cents
+      },
+      quantity: item.quantity,
+    }));
+
+    // Delivery as its own line, same as before
+    const totalDeliveryCost = cart.items.reduce((total, item) => total + item.deliveryCost, 0);
+    if (totalDeliveryCost > 0) {
+      line_items.push({
+        price_data: {
+          currency: stripeCurrency,
+          product_data: {
+            name: 'Delivery Cost'
+          },
+          unit_amount: Math.round(totalDeliveryCost * 100), // Convert to cents
+        },
+        quantity: 1,
+      });
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -36,7 +75,7 @@ router.post('/stripe/checkout', async (req, res) => {
     res.json({ url: session.url });
   } catch (err) {
     console.error('Stripe error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "An internal server error occurred" });
   }
 });
 

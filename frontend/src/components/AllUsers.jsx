@@ -115,12 +115,8 @@ export const AllUsers = () => {
     if (sortBy === "name") return a.name.localeCompare(b.name);
     if (sortBy === "date") return new Date(b.createdAt) - new Date(a.createdAt);
     if (sortBy === "lastLogin") {
-      const aLastLogin = a.loginHistory && a.loginHistory.length > 0 
-        ? new Date(a.loginHistory[a.loginHistory.length - 1].timestamp)
-        : new Date(0);
-      const bLastLogin = b.loginHistory && b.loginHistory.length > 0 
-        ? new Date(b.loginHistory[b.loginHistory.length - 1].timestamp)
-        : new Date(0);
+      const aLastLogin = a.lastLogin ? new Date(a.lastLogin.timestamp) : new Date(0);
+      const bLastLogin = b.lastLogin ? new Date(b.lastLogin.timestamp) : new Date(0);
       return bLastLogin - aLastLogin;
     }
     return 0;
@@ -410,8 +406,8 @@ export const AllUsers = () => {
                           {new Date(user.createdAt).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
-                          {user.loginHistory && user.loginHistory.length > 0 
-                            ? formatTimeAgo(user.loginHistory[user.loginHistory.length - 1].timestamp)
+                          {user.lastLogin
+                            ? formatTimeAgo(user.lastLogin.timestamp)
                             : 'Never'}
                         </td>
                         <td className="px-6 py-4 text-sm font-medium whitespace-nowrap">
@@ -564,14 +560,14 @@ export const AllUsers = () => {
                   <div className="flex items-center mb-3">
                     <h3 className="text-base font-bold text-green-600">Login Information</h3>
                   </div>
-                  {previewUser.loginHistory && previewUser.loginHistory.length > 0 ? (
+                  {previewUser.lastLogin ? (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div className="flex items-center p-2 transition-colors rounded-lg hover:bg-green-50">
                         <FaCalendarAlt className="w-4 h-4 mr-2 text-green-600" />
                         <div>
                           <p className="text-xs font-medium text-gray-500">Last Login</p>
                           <p className="text-sm font-semibold text-gray-800">
-                            {formatTimeAgo(previewUser.loginHistory[previewUser.loginHistory.length - 1].timestamp)}
+                            {formatTimeAgo(previewUser.lastLogin.timestamp)}
                           </p>
                         </div>
                       </div>
@@ -580,7 +576,7 @@ export const AllUsers = () => {
                         <div>
                           <p className="text-xs font-medium text-gray-500">Device</p>
                           <p className="text-sm font-semibold text-gray-800">
-                            {formatDeviceInfo(previewUser.loginHistory[previewUser.loginHistory.length - 1].deviceInfo)}
+                            {formatDeviceInfo(previewUser.lastLogin.deviceInfo)}
                           </p>
                         </div>
                       </div>

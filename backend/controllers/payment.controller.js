@@ -7,7 +7,7 @@ export const createPayment = async (req, res) => {
     const payment = await Payment.create({ driverId, driverName, payAmount });
     res.status(201).json(payment);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -16,7 +16,7 @@ export const getAllPayments = async (req, res) => {
     const payments = await Payment.find().sort({ createdAt: -1 }); 
     res.status(200).json(payments);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -48,6 +48,6 @@ export const createCheckoutSession = async (req, res) => {
     res.json({ id: session.id });
   } catch (err) {
     console.error('Stripe error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "An internal server error occurred" });
   }
 };
