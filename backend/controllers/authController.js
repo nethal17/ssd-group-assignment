@@ -2,10 +2,16 @@ import { User } from "../models/user.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import nodemailer from "nodemailer";
 import { signAccessToken } from "../utils/token.js";
+import { USER_SAFE_FIELDS, toUserDTO, toAdminUserSummary } from "../utils/userSerializer.js";
 
 export const blacklistedTokens = new Set();
+
+// 2FA state is select:false on the model; verifyTwoStepCode must opt in to read it
+const TWO_FACTOR_FIELDS =
+    "+twoStepVerificationCode +twoStepVerificationExpire +twoStepVerificationAttempts +mfaTicket +mfaTicketExpire";
 
 export const generateVerificationCode = () => {
     // Cryptographically secure 6-digit random code (100000 - 999999)
@@ -205,7 +211,8 @@ export const loginUser = async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        const user = await User.findOne({ email });
+        // password is select:false - opt in only where it is compared
+        const user = await User.findOne({ email }).select("+password");
         if (!user) {
             return res.status(400).json({ msg: "Invalid credentials" });
         }
@@ -469,12 +476,13 @@ export const verifyTwoStepCode = async (req, res) => {
             user = await User.findOne({
                 mfaTicket: hashedTicket,
                 mfaTicketExpire: { $gt: Date.now() }
-            });
+            }).select(TWO_FACTOR_FIELDS);
         }
 
         // Fallback to email or userId if ticket was not provided
         if (!user && (email || userId)) {
-            user = email ? await User.findOne({ email }) : await User.findById(userId);
+            const query = email ? User.findOne({ email }) : User.findById(userId);
+            user = await query.select(TWO_FACTOR_FIELDS);
         }
 
         // Generic error response to prevent account enumeration
@@ -569,8 +577,13 @@ export const verifyTwoStepCode = async (req, res) => {
 
 export const getUsers = async (req, res) => {
     try {
-        const users = await User.find({});
-        res.status(200).json({ count: users.length, data: users });
+        // Project at the DB: only safe fields plus what lastLogin needs (no IPs)
+        const users = await User.find({})
+            .select(`${USER_SAFE_FIELDS} loginHistory.timestamp loginHistory.deviceInfo loginHistory.status`)
+            .lean();
+
+        const data = users.map(toAdminUserSummary);
+        res.status(200).json({ count: data.length, data });
 
     } catch (err) {
         console.log(err);
@@ -581,9 +594,17 @@ export const getUsers = async (req, res) => {
 export const getUserById = async (req, res) => {
     const { id } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: "Invalid user id" });
+    }
+
     try {
-        const user = await User.findById(id);
-        res.status(200).json(user);
+        const user = await User.findById(id).select(USER_SAFE_FIELDS).lean();
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        res.status(200).json(toUserDTO(user));
 
     } catch (err) {
         console.log(err);
@@ -602,13 +623,15 @@ export const updateUserDetails = async (req, res) => {
 
         let updatedData = { name, email, phone };
 
-        const result = await User.findByIdAndUpdate(id, updatedData, { new: true });
+        const result = await User.findByIdAndUpdate(id, updatedData, { new: true })
+            .select(USER_SAFE_FIELDS)
+            .lean();
 
         if (!result) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        res.status(200).json({ message: "User updated successfully", user: result });
+        res.status(200).json({ message: "User updated successfully", user: toUserDTO(result) });
 
     } catch (err) {
         console.error("Error updating user:", err);
@@ -635,11 +658,11 @@ export const updateSecurityTimestamp = async (req, res) => {
 };
 
 export const changePassword = async (req, res) => {
-    const { id } = req.params;
+    const { userId } = req.params;
     const { currentPassword, newPassword, confirmNewPassword } = req.body;
 
     try {
-        const user = await User.findById(id);
+        const user = await User.findById(userId).select("+password");
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }

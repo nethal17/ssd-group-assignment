@@ -217,7 +217,7 @@ export const approveProductListing = async (req, res) => {
   try {
     const { listingId } = req.params;
 
-    const listing = await ProductListing.findById(listingId).populate('farmerId');
+    const listing = await ProductListing.findById(listingId).populate('farmerId', 'name email');
     if (!listing) {
       return res.status(404).json({ message: 'Product listing not found.' });
     }
@@ -290,7 +290,7 @@ export const deleteProductListing = async (req, res) => {
     const { listingId } = req.params;
     const { reason, farmerEmail, productName } = req.body;
 
-    const deletedListing = await ProductListing.findByIdAndDelete(listingId).populate('farmerId');
+    const deletedListing = await ProductListing.findByIdAndDelete(listingId).populate('farmerId', 'name email');
     if (!deletedListing) {
       return res.status(404).json({ message: 'Product listing not found.' });
     }
