@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches: [development]
+  pull_request:
+    branches: [development]
+
+# Cancel superseded runs on the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend-build:
+    name: Backend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # No build step for an Express app, so the equivalent gate is:
+      # every source file parses, and every module actually imports.
+      - name: Syntax check
+        run: find . -name '*.js' -not -path './node_modules/*' -print0 | xargs -0 -n1 node --check
+
+      - name: Import check
+        # Catches bad import paths and missing exports, which parsing misses.
+        # index.js is excluded - it connects to Mongo at import time.
+        env:
+          JWT_SECRET: ci-placeholder
+          STRIPE_SECRET_KEY: sk_test_ci_placeholder
+        run: |
+          find controllers middleware models routes utils -name '*.js' -print0 \
+            | xargs -0 -I{} node --input-type=module -e "await import('./{}')"
+
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        # Report-only: 4 pre-existing errors. Remove continue-on-error to enforce.
+        continue-on-error: true
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [backend, frontend]
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ${{ matrix.workspace }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.workspace }}
+        run: npm ci
+
+      # Runs with no account, so this job still reports something if the Snyk
+      # token is missing or the free quota is used up.
+      # Report-only today: backend has 12 high, frontend 18 high + 2 critical.
+      # Once those are triaged, drop continue-on-error to make it a real gate.
+      - name: npm audit
+        id: audit
+        continue-on-error: true
+        working-directory: ${{ matrix.workspace }}
+        run: npm audit --audit-level=high
+
+      - name: Snyk dependency scan
+        # Skipped rather than failed when SNYK_TOKEN isn't configured.
+        if: env.SNYK_TOKEN != ''
+        continue-on-error: true
+        uses: snyk/actions/node@master
+        with:
+          args: >-
+            --severity-threshold=high
+            --file=${{ matrix.workspace }}/package.json
+
+      - name: Summary
+        if: always()
+        working-directory: ${{ matrix.workspace }}
+        run: |
+          {
+            echo "### ${{ matrix.workspace }} security scan"
+            echo ""
+            if [ -z "$SNYK_TOKEN" ]; then
+              echo "- Snyk: **skipped** (no SNYK_TOKEN secret configured)"
+            else
+              echo "- Snyk: ran (see step log)"
+            fi
+            echo "- npm audit: \`${{ steps.audit.outcome }}\`"
+            echo ""
+            echo '```'
+            npm audit --audit-level=high 2>&1 | tail -20 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
