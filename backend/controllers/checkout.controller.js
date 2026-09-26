@@ -1,5 +1,6 @@
 import Checkout from "../models/checkout.model.js";
-import Cart from "../models/Cart.js"; 
+import Cart from "../models/Cart.js";
+import { repriceCart } from "../utils/cartPricing.js";
 
 // Add Checkout Details
 export const addCheckoutDetails = async (req, res) => {
@@ -9,6 +10,10 @@ export const addCheckoutDetails = async (req, res) => {
     // Get cart total price for this user
     const cart = await Cart.findOne({ userId });
     if (!cart) return res.status(404).json({ message: "Cart not found" });
+
+    // Re-price from the listings before charging anything
+    await repriceCart(cart);
+    await cart.save();
 
     // Create checkout entry
     const checkout = new Checkout({
@@ -35,6 +40,10 @@ export const getBillDetails = async (req, res) => {
     const cart = await Cart.findOne({ userId }).populate("items.wasteId");
 
     if (!cart) return res.status(404).json({ message: "Cart is empty" });
+
+    // Bill must be built from listing prices, not whatever is stored
+    await repriceCart(cart);
+    await cart.save();
 
     res.status(200).json({
       items: cart.items,
