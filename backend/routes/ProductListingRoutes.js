@@ -12,6 +12,7 @@ import {
   getRandomApprovedProductListings
 } from '../controllers/productListingController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
+import { authorizeRoles } from '../middleware/roleMiddleware.js';
 
 
 const router = express.Router();
@@ -32,8 +33,8 @@ router.get('/random-approved', getRandomApprovedProduct);
 router.get('/random-approved-listings', getRandomApprovedProductListings);
 
 // Admin routes
-router.get('/admin/listings',authMiddleware, getAllProductListings);
-router.put('/admin/approve/:listingId',authMiddleware, approveProductListing);
-router.delete('/admin/delete/:listingId',authMiddleware, deleteProductListing);
+router.get('/admin/listings', authMiddleware, authorizeRoles("admin"), getAllProductListings);
+router.put('/admin/approve/:listingId', authMiddleware, authorizeRoles("admin"), approveProductListing);
+router.delete('/admin/delete/:listingId', authMiddleware, authorizeRoles("admin"), deleteProductListing);
 
 export default router;

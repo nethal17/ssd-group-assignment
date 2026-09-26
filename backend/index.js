@@ -35,6 +35,9 @@ import reportRoutes from "./routes/reportRoutes.js";
 import vehicleRegRoutes from "./routes/VehicleReg.routes.js";
 import deliveryHistoryRoutes from './routes/deliveryHistory.routes.js';
 
+import { authMiddleware } from './middleware/authMiddleware.js';
+import { authorizeRoles } from './middleware/roleMiddleware.js';
+
 
 
 dotenv.config();
@@ -50,23 +53,34 @@ app.get("/", (req, res) => {
   res.send("Agri-Waste Backend API is Running...");
 });
 
+// Public routes - no token needed
+
 //Nethal
+// login/register are public; admin routes guarded inside authRoutes.js
 app.use("/api/auth", router);
+
+//vibhu
+// Stripe verifies this with a signature, not a JWT
+app.use('/api/webhook', webhookRoutes);
+
+// Everything below needs a valid token
+app.use("/api", authMiddleware);
+
+//Nethal
 app.use("/api/photo", photoRouter);
 
 //vibhu
 app.use('/api', driverRoutes);
 app.use('/api', paymentRoutes);
 app.use('/api', stripeRoutes);
-app.use('/api/webhook', webhookRoutes);
 app.use('/api', stripePaymentsRoutes);
-app.use('/api/driver-payments', driverPaymentsRoutes);
+app.use('/api/driver-payments', authorizeRoles("admin"), driverPaymentsRoutes);
 app.use('/api', driverPaymentRoutes);
 app.use('/api/refunds', refundRoutes);
 app.use('/api/delivery', deliveryRoutes);
 
 // Reports & Analytics
-app.use('/api/reports', reportRoutes);
+app.use('/api/reports', authorizeRoles("admin"), reportRoutes);
 
 
 //Ricky

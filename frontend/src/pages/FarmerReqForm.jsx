@@ -1,4 +1,4 @@
-import { API_URL } from "../utils/api";
+import { apiService } from "../utils/api";
 import { useState, useEffect } from "react";
 
 
@@ -9,9 +9,8 @@ const FarmerReqForm = () => {
   const [updatedFarmer, setUpdatedFarmer] = useState({});
 
   useEffect(() => {
-    fetch(`${API_URL}/api/deliveryReq/get-delivery-requests`)
-      .then((res) => res.json())
-      .then((data) => setFarmers(data))
+    apiService.get("/api/deliveryReq/get-delivery-requests")
+      .then((res) => setFarmers(res.data))
       .catch((err) => console.error("Error fetching farmers:", err));
   }, []);
 
@@ -32,12 +31,7 @@ const FarmerReqForm = () => {
   };
 
   const handleUpdateSubmit = () => {
-    fetch(`${API_URL}/api/deliveryReq/update-farmer/${selectedFarmer._id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updatedFarmer),
-    })
-      .then((res) => res.json())
+    apiService.put(`/api/deliveryReq/update-farmer/${selectedFarmer._id}`, updatedFarmer)
       .then(() => {
         setIsUpdateModalOpen(false);
         window.location.reload();
@@ -47,7 +41,7 @@ const FarmerReqForm = () => {
 
   const handleDeleteFarmer = (id) => {
     if (window.confirm("Are you sure you want to delete this farmer?")) {
-      fetch(`${API_URL}/api/deliveryReq/delete-farmer/${id}`, { method: "DELETE" })
+      apiService.delete(`/api/deliveryReq/delete-farmer/${id}`)
         .then(() => {
           setFarmers((prev) => prev.filter((farmer) => farmer._id !== id));
           window.location.reload();
