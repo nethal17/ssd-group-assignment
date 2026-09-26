@@ -41,14 +41,17 @@ import deliveryHistoryRoutes from './routes/deliveryHistory.routes.js';
 import { authMiddleware } from './middleware/authMiddleware.js';
 import { authorizeRoles } from './middleware/roleMiddleware.js';
 import { errorHandler } from './middleware/errorHandler.js';
-
-
+import { globalLimiter } from './middleware/rateLimiter.js';
 
 dotenv.config();
 
 const app = express();
+app.set("trust proxy", 1);
 app.use('/api/webhook', express.raw({ type: 'application/json' }));
 // Middleware
+
+// Apply global rate limiter to all incoming requests
+app.use(globalLimiter);
 
 // Set security HTTP headers
 app.use(helmet());
