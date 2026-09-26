@@ -2,6 +2,9 @@ import dotenv from "dotenv";
 import express, { json } from "express";
 import { connect } from "mongoose";
 import cors from "cors";
+import helmet from "helmet";
+import mongoSanitize from "express-mongo-sanitize";
+import hpp from "hpp";
 import cookieParser from "cookie-parser";
 import router from "./routes/authRoutes.js";
 import inventoryRoutes from "./routes/inventoryRoutes.js";
@@ -46,8 +49,24 @@ dotenv.config();
 const app = express();
 app.use('/api/webhook', express.raw({ type: 'application/json' }));
 // Middleware
+
+// Set security HTTP headers
+app.use(helmet());
+
 app.use(json());
-app.use(cors());
+
+// Restrict CORS to the frontend origin only
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  credentials: true
+}));
+
+// Sanitize data against NoSQL query injection
+app.use(mongoSanitize());
+
+// Prevent HTTP Parameter Pollution
+app.use(hpp());
+
 app.use(cookieParser());
 
 app.get("/", (req, res) => {
