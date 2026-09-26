@@ -184,7 +184,7 @@ export const getAllProductListings = async (req, res) => {
       .populate('farmerId', 'name email');
     res.status(200).json(listings);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -195,7 +195,7 @@ export const getApprovedProductListings = async (req, res) => {
       .populate('farmerId', 'name email');
     res.status(200).json(listings);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -209,7 +209,7 @@ export const getRandomApprovedProductListings = async (req, res) => {
     ]);
     res.status(200).json(listings);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -281,7 +281,7 @@ export const approveProductListing = async (req, res) => {
 
     res.status(200).json({ message: 'Product listing approved and moved to Marketplace.' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -347,7 +347,7 @@ export const deleteProductListing = async (req, res) => {
 
     res.status(200).json({ message: 'Product listing deleted and farmer notified successfully.' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 

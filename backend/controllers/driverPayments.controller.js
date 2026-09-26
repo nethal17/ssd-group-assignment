@@ -30,6 +30,6 @@ export const getDriverPayments = async (req, res) => {
     res.status(200).json(driverPayments);
   } catch (error) {
     console.error('Error fetching driver payments:', error); 
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "An internal server error occurred" });
   }
 };

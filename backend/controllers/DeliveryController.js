@@ -32,7 +32,7 @@ export const addDelivery = async (req, res) => {
         res.status(201).json({ message: 'Delivery added successfully.', delivery: newDelivery });
     } catch (error) {
         console.error('Error adding delivery:', error);
-        res.status(500).json({ message: 'Failed to add delivery.', error: error.message });
+        res.status(500).json({ message: 'Failed to add delivery.', error: "An internal server error occurred" });
     }
 } 
 
@@ -65,7 +65,7 @@ export const getAllDeliveries = async (req, res) => {
         res.status(200).json(deliveries);
     } catch (error) {
         console.error('Error fetching all deliveries:', error);
-        res.status(500).json({ message: 'Failed to fetch all deliveries.', error: error.message });
+        res.status(500).json({ message: 'Failed to fetch all deliveries.', error: "An internal server error occurred" });
     }
 }
 
@@ -88,7 +88,7 @@ export const getDeliveryById = async (req, res) => {
         res.status(200).json(delivery);
     } catch (error) {
         console.error('Error fetching delivery:', error);
-        res.status(500).json({ message: 'Failed to fetch delivery.', error: error.message });
+        res.status(500).json({ message: 'Failed to fetch delivery.', error: "An internal server error occurred" });
     }
 }
 
@@ -116,7 +116,7 @@ export const updateDeliveryStatus = async (req, res) => {
         res.status(200).json({ message: 'Delivery status updated successfully.', delivery: updatedDelivery });
     } catch (error) {
         console.error('Error updating delivery status:', error);
-        res.status(500).json({ message: 'Failed to update delivery status.', error: error.message });
+        res.status(500).json({ message: 'Failed to update delivery status.', error: "An internal server error occurred" });
     }
 }
 
@@ -139,6 +139,6 @@ export const getDeliveriesByUserId = async (req, res) => {
         res.status(200).json(deliveries);
     } catch (error) {
         console.error('Error fetching deliveries:', error);
-        res.status(500).json({ message: 'Failed to fetch deliveries.', error: error.message });
+        res.status(500).json({ message: 'Failed to fetch deliveries.', error: "An internal server error occurred" });
     }
 }

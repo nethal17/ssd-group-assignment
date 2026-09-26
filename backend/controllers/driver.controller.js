@@ -7,7 +7,7 @@ export const createDriver = async (req, res) => {
     const driver = await Driver.create({ name, age });
     res.status(201).json(driver);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -29,7 +29,7 @@ export const updateDriverSalary = async (req, res) => {
     const driver = await Driver.findByIdAndUpdate(id, { totalSalary }, { new: true });
     res.status(200).json(driver);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -43,7 +43,7 @@ export const getAllPayments = async (req, res) => {
     }));
     res.status(200).json(payments);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -71,6 +71,6 @@ export const updateDriverDeliveryCount = async (req, res) => {
     
     res.status(200).json(driver);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };

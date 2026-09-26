@@ -7,7 +7,7 @@ export const getAllWaste = async (req, res) => {
     res.json({ waste });
   } catch (error) {
     console.log("Error in getAllWaste controller", error.message);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: "Server error", error: "An internal server error occurred" });
   }
 };
 
@@ -19,7 +19,7 @@ export const createWaste = async (req, res) => {
     res.status(201).json(waste);
   } catch (error) {
     console.log("Error in createWaste controller", error.message);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: "Server error", error: "An internal server error occurred" });
   }
 };
 

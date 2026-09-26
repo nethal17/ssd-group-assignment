@@ -37,6 +37,7 @@ import deliveryHistoryRoutes from './routes/deliveryHistory.routes.js';
 
 import { authMiddleware } from './middleware/authMiddleware.js';
 import { authorizeRoles } from './middleware/roleMiddleware.js';
+import { errorHandler } from './middleware/errorHandler.js';
 
 
 
@@ -102,6 +103,9 @@ app.use("/api/order-history", orderHistoryRoutes);
 app.use('/api/deliveryReq', deliveryReqRoutes);
 app.use("/api/vehicle-reg", vehicleRegRoutes);
 app.use('/api/delivery-orders', deliveryHistoryRoutes);
+
+// Central Error Handler
+app.use(errorHandler);
 
 // MongoDB Connection - Connect before starting server
 connect(process.env.MONGO_URI, {
