@@ -11,6 +11,7 @@ export const Login = () => {
   const [loading, setLoading] = useState(false);
   const [showVerification, setShowVerification] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [mfaTicket, setMfaTicket] = useState('');
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -24,6 +25,7 @@ export const Login = () => {
 
       if (response.data.requiresVerification) {
         setUserEmail(email);
+        setMfaTicket(response.data.mfaTicket || '');
         setShowVerification(true);
         toast.success('Verification code sent to your email');
       } else {
@@ -41,7 +43,7 @@ export const Login = () => {
   };
 
   if (showVerification) {
-    return <TwoStepVerification email={userEmail} />;
+    return <TwoStepVerification email={userEmail} mfaTicket={mfaTicket} />;
   }
 
   return (

@@ -9,6 +9,9 @@ const SECRET_FIELDS = [
     "verificationToken",
     "twoStepVerificationCode",
     "twoStepVerificationExpire",
+    "twoStepVerificationAttempts",
+    "mfaTicket",
+    "mfaTicketExpire",
 ];
 
 // Never serialised, even when a document was loaded with the secrets selected.
@@ -30,6 +33,9 @@ const UserSchema = new mongoose.Schema({
     verificationToken: { type: String, select: false },
     twoStepVerificationCode: { type: String, select: false },
     twoStepVerificationExpire: { type: Date, select: false },
+    twoStepVerificationAttempts: { type: Number, default: 0, select: false },
+    mfaTicket: { type: String, select: false },
+    mfaTicketExpire: { type: Date, select: false },
     twoFactorEnabled: { type: Boolean, default: false },
     loginHistory: [{
         timestamp: { type: Date, default: Date.now },
