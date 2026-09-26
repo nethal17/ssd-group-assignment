@@ -73,7 +73,7 @@ export const updateCartItem = async (req, res) => {
     res.status(200).json(cart);
   } catch (error) {
     console.error("Error updating cart item:", error);
-    res.status(500).json({ error: "Failed to update item quantity", details: error.message });
+    res.status(500).json({ error: "Failed to update item quantity", details: "An internal server error occurred" });
   }
 };
 

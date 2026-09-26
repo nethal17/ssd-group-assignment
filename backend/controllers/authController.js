@@ -487,7 +487,7 @@ export const getUsers = async (req, res) => {
 
     } catch (err) {
         console.log(err);
-        res.status(500).json({ message: err.message });
+        res.status(500).json({ message: "An internal server error occurred" });
     }
 };
 
@@ -500,7 +500,7 @@ export const getUserById = async (req, res) => {
 
     } catch (err) {
         console.log(err);
-        res.status(500).json({ message: err.message });
+        res.status(500).json({ message: "An internal server error occurred" });
     }
 };
 
@@ -706,7 +706,7 @@ export const deleteUser = async (req, res) => {
 
     } catch (err) {
         console.error("Error in deleteUser:", err);
-        res.status(500).json({ message: err.message });
+        res.status(500).json({ message: "An internal server error occurred" });
     }
 };
 

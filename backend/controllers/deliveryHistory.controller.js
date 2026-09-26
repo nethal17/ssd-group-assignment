@@ -6,7 +6,7 @@ export const getAllDeliveryOrders = async (req, res) => {
     const orders = await DeliveryOrder.find();
     res.json(orders);
   } catch (err) {
-    res.status(500).json({ msg: err.message });
+    res.status(500).json({ msg: "An internal server error occurred" });
   }
 };
 
@@ -20,7 +20,7 @@ export const acceptOrder = async (req, res) => {
     );
     res.json(order);
   } catch (err) {
-    res.status(500).json({ msg: err.message });
+    res.status(500).json({ msg: "An internal server error occurred" });
   }
 };
 
@@ -34,7 +34,7 @@ export const declineOrder = async (req, res) => {
     );
     res.json(order);
   } catch (err) {
-    res.status(500).json({ msg: err.message });
+    res.status(500).json({ msg: "An internal server error occurred" });
   }
 };
 
@@ -48,6 +48,6 @@ export const markAsDone = async (req, res) => {
     );
     res.json(order);
   } catch (err) {
-    res.status(500).json({ msg: err.message });
+    res.status(500).json({ msg: "An internal server error occurred" });
   }
 }; 

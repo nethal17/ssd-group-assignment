@@ -36,7 +36,7 @@ router.post('/stripe/checkout', async (req, res) => {
     res.json({ url: session.url });
   } catch (err) {
     console.error('Stripe error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "An internal server error occurred" });
   }
 });
 

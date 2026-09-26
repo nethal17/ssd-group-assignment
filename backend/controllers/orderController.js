@@ -24,7 +24,7 @@ export const addOrder = async (req, res) => {
     res.status(201).json({ message: 'Order created successfully.', order: newOrder });
   } catch (error) {
     console.error('Error adding order:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -50,7 +50,7 @@ export const getOrdersByUserId = async (req, res) => {
   res.status(200).json(orders);
   } catch (error) {
     console.error('Error fetching orders:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 

@@ -23,7 +23,7 @@ export const getProductById = async (req, res) => {
     res.status(200).json(product);
   } catch (error) {
     console.error('Error fetching product details:', error);
-    res.status(500).json({ message: 'Failed to fetch product details.', error: error.message });
+    res.status(500).json({ message: 'Failed to fetch product details.', error: "An internal server error occurred" });
   }
 };
 
@@ -46,7 +46,7 @@ export const getFarmerListings = async (req, res) => {
 
     res.status(200).json(products);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -68,7 +68,7 @@ export const getListingDetails = async (req, res) => {
 
     res.status(200).json(listing);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };
 
@@ -90,6 +90,6 @@ export const deleteListing = async (req, res) => {
 
     res.status(200).json({ message: 'Listing deleted successfully.' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "An internal server error occurred" });
   }
 };

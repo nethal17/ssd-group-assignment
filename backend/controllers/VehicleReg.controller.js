@@ -21,7 +21,7 @@ export const registerVehicle = async (req, res) => {  // <-- Renamed function
 
     res.status(201).json({ msg: "Vehicle registered", vehicle: newVehicle });
   } catch (err) {
-    res.status(500).json({ msg: err.message });
+    res.status(500).json({ msg: "An internal server error occurred" });
   }
 };
 
@@ -31,7 +31,7 @@ export const getAllVehicles = async (req, res) => {
     const vehicles = await VehicleRegModel.find().sort({ createdAt: -1 });
     res.status(200).json(vehicles);
   } catch (err) {
-    res.status(500).json({ msg: err.message });
+    res.status(500).json({ msg: "An internal server error occurred" });
   }
 };
 
@@ -47,7 +47,7 @@ export const deleteVehicle = async (req, res) => {
     
     res.status(200).json({ msg: "Vehicle deleted successfully" });
   } catch (err) {
-    res.status(500).json({ msg: err.message });
+    res.status(500).json({ msg: "An internal server error occurred" });
   }
 };
 
@@ -68,6 +68,6 @@ export const updateVehicleDetails = async (req, res) => {
 
     res.status(200).json({ msg: "Vehicle details updated successfully", vehicle: updatedVehicle });
   } catch (err) {
-    res.status(500).json({ msg: err.message });
+    res.status(500).json({ msg: "An internal server error occurred" });
   }
 };
