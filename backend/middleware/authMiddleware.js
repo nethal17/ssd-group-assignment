@@ -1,8 +1,9 @@
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import { blacklistedTokens } from "../controllers/authController.js";
+import { User } from "../models/user.js";
 
-export const authMiddleware = (req, res, next) => {
+export const authMiddleware = async (req, res, next) => {
     // Check for JWT_SECRET
     if (!process.env.JWT_SECRET) {
         console.error("JWT_SECRET is not defined.");
@@ -22,18 +23,46 @@ export const authMiddleware = (req, res, next) => {
 
     // Check if token is blacklisted
     if (blacklistedTokens.has(token)) {
-        console.log("Attempted use of blacklisted token:", token);
         return res.status(401).json({ msg: "Token has been blacklisted. Please log in again." });
     }
 
-    // Verify token
+    // Verify token and re-hydrate user
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        console.log("Decoded Token:", decoded);
-        req.user = decoded;
+        const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+            algorithms: ["HS256"],
+            issuer: "agri-waste-api",
+            audience: "agri-waste-web"
+        });
+
+        const userId = decoded.sub || decoded.id || decoded._id;
+        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(401).json({ msg: "Token invalid: invalid subject identifier" });
+        }
+
+        // Re-hydrate user from DB so role updates and deactivations take effect immediately
+        const user = await User.findById(userId).select("role email isVerified name");
+        if (!user) {
+            return res.status(401).json({ msg: "User no longer exists or authorization revoked" });
+        }
+
+        // Consistent contract for req.user across all controllers and middlewares
+        req.user = {
+            id: user._id.toString(),
+            _id: user._id.toString(),
+            userId: user._id.toString(),
+            sub: user._id.toString(),
+            role: user.role,
+            email: user.email,
+            name: user.name,
+            isVerified: user.isVerified
+        };
+
         next();
     } catch (err) {
-        console.log("Token Verification Error:", err.message);
-        res.status(401).json({ msg: "Token is not valid" });
+        console.error("Token Verification Error:", err.message);
+        if (err.name === "TokenExpiredError") {
+            return res.status(401).json({ msg: "Token expired. Please log in again." });
+        }
+        return res.status(401).json({ msg: "Token is not valid" });
     }
 };
