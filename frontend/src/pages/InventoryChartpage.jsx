@@ -4,7 +4,7 @@ import { Pie, Bar, Doughnut } from 'react-chartjs-2';
 import { Chart, registerables } from 'chart.js';
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
-import { API_URL } from "../utils/api";
+import { apiService } from "../utils/api";
 
 Chart.register(...registerables);
 
@@ -62,11 +62,8 @@ export const InventoryChartpage = () => {
 
   const fetchMarketplaceListings = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/marketplace/listings`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch marketplace listings.");
-      }
-      const data = await response.json();
+      const response = await apiService.get("/api/marketplace/listings");
+      const data = response.data;
       
       const listingsWithTypes = data.map(listing => ({
         ...listing,

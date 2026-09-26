@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
 import { Navbar } from "../components/Navbar";
 import { useNavigate } from "react-router-dom";
-import { apiService, API_URL } from "../utils/api";
+import { apiService } from "../utils/api";
 
 export const ProductListingForm = () => {
   const navigate = useNavigate();
@@ -80,9 +80,8 @@ export const ProductListingForm = () => {
   // Fetch Waste Types 
   useEffect(() => {
     if (formData.wasteCategory) {
-      fetch(`${API_URL}/api/product-listing/waste-types/${formData.wasteCategory}`)
-        .then((res) => res.json())
-        .then((data) => setWasteTypes(data))
+      apiService.get(`/api/product-listing/waste-types/${formData.wasteCategory}`)
+        .then((res) => setWasteTypes(res.data))
         .catch(() => toast.error("Failed to fetch waste types"));
     }
   }, [formData.wasteCategory]);
@@ -90,9 +89,8 @@ export const ProductListingForm = () => {
   // Fetch Waste Items 
   useEffect(() => {
     if (formData.wasteType) {
-      fetch(`${API_URL}/api/product-listing/waste-items/${formData.wasteType}`)
-        .then((res) => res.json())
-        .then((data) => setWasteItems(data))
+      apiService.get(`/api/product-listing/waste-items/${formData.wasteType}`)
+        .then((res) => setWasteItems(res.data))
         .catch(() => toast.error("Failed to fetch waste items"));
     }
   }, [formData.wasteType]);
@@ -100,9 +98,8 @@ export const ProductListingForm = () => {
   // Fetch Districts based on Province
   useEffect(() => {
     if (formData.province) {
-      fetch(`${API_URL}/api/product-listing/districts/${formData.province}`)
-        .then((res) => res.json())
-        .then((data) => setDistricts(data))
+      apiService.get(`/api/product-listing/districts/${formData.province}`)
+        .then((res) => setDistricts(res.data))
         .catch(() => toast.error("Failed to fetch districts"));
     }
   }, [formData.province]);

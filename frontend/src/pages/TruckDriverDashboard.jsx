@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { API_URL } from "../utils/api";
+import { apiService } from "../utils/api";
 import { useNavigate } from "react-router-dom";
 import { Navbar } from "../components/Navbar";
 import { GoogleMap, LoadScript, Marker } from "@react-google-maps/api";
@@ -39,9 +39,9 @@ const TruckDriverDashboard = () => {
   };
 
   useEffect(() => {
-    fetch(`${API_URL}/api/deliveryReq/get-delivery-requests`)
-      .then((res) => res.json())
-      .then((data) => {
+    apiService.get("/api/deliveryReq/get-delivery-requests")
+      .then((res) => {
+        const data = res.data;
         setPendingRequests(data.filter((req) => req.status === "Pending"));
         setAcceptedRequests(data.filter((req) => req.status === "accepted"));
         setCompletedDeliveries(data.filter((req) => req.status === "completed"));
@@ -50,9 +50,7 @@ const TruckDriverDashboard = () => {
   }, []);
 
   const handleAccept = (id) => {
-    fetch(`${API_URL}/api/deliveryReq/update-delivery-requests/${id}`, {
-      method: "PUT",
-    }).then(() => {
+    apiService.put(`/api/deliveryReq/update-delivery-requests/${id}`).then(() => {
       setPendingRequests((prev) => prev.filter((req) => req._id !== id));
       setAcceptedRequests((prev) => [...prev, { _id: id, status: "accepted" }]);
       window.location.reload();
@@ -60,9 +58,7 @@ const TruckDriverDashboard = () => {
   };
 
   const handleCompleted = (id) => {
-    fetch(`${API_URL}/api/deliveryReq/update-delivery-requests/${id}`, {
-      method: "PUT",
-    }).then(() => {
+    apiService.put(`/api/deliveryReq/update-delivery-requests/${id}`).then(() => {
       setPendingRequests((prev) => prev.filter((req) => req._id !== id));
       setCompletedDeliveries((prev) => [...prev, { _id: id, status: "completed" }]);
       window.location.reload();
@@ -70,9 +66,7 @@ const TruckDriverDashboard = () => {
   };
 
   const handleDelete = (id) => {
-    fetch(`${API_URL}/api/deliveryReq/delete-delivery-request/${id}`, {
-      method: "DELETE",
-    })
+    apiService.delete(`/api/deliveryReq/delete-delivery-request/${id}`)
       .then(() => {
         setPendingRequests((prev) => prev.filter((req) => req._id !== id));
       })
