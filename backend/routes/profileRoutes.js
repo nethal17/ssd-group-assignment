@@ -3,6 +3,7 @@ import multer from "multer";
 import cloudinary from "cloudinary";
 import { User } from "../models/user.js";
 import dotenv from "dotenv";
+import { requireSelfOrAdmin } from "../middleware/ownership.js";
 
 dotenv.config();
 
@@ -17,7 +18,7 @@ cloudinary.v2.config({
 });
 
 // Upload profile picture
-photoRouter.post("/upload-profile-pic/:userId", upload.single("profilePic"), async (req, res) => {
+photoRouter.post("/upload-profile-pic/:userId", requireSelfOrAdmin("userId"), upload.single("profilePic"), async (req, res) => {
     try {
       const { userId } = req.params;
       const file = req.file;

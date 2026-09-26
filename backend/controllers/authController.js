@@ -257,7 +257,8 @@ export const loginUser = async (req, res) => {
         });
         await user.save();
 
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
+        // role goes in the token - the role checks read it off req.user
+        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" });
         
         // Send complete user data in response
         res.json({ 
@@ -432,10 +433,10 @@ export const resetPassword = async (req, res) => {
 };
 
 export const verifyTwoStepCode = async (req, res) => {
-    const { userId, code } = req.body;
+    const { email, code } = req.body;
 
     try {
-        const user = await User.findById(userId);
+        const user = await User.findOne({ email });
 
         if (!user) {
             return res.status(404).json({ msg: "User not found" });

@@ -1,25 +1,33 @@
 import express from "express";
 import { registerUser, loginUser, logoutUser, verifyEmail, verifyTwoStepCode, getLoginHistory, toggleTwoFactorAuth, exportUsers } from "../controllers/authController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
+import { authorizeRoles } from "../middleware/roleMiddleware.js";
+import { requireSelfOrAdmin } from "../middleware/ownership.js";
 import { forgotPassword, resetPassword, changePassword} from "../controllers/authController.js";
 import { getUsers, getUserById, updateUserDetails, deleteUser } from "../controllers/authController.js";
 
 const router = express.Router();
 
+// Public - how you get a token
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.post("/verify-two-step-code", verifyTwoStepCode);
 router.post("/logout", logoutUser);
 router.post("/forgot-password", forgotPassword);
-router.put("/change-password/:userId", changePassword);  
-router.post("/reset-password/:token", resetPassword); 
-router.get("/verify-email/:token", verifyEmail); 
-router.get("/getAllUsers", getUsers);
-router.get("/searchUser/:id", getUserById);
-router.put("/updateUser/:id", updateUserDetails);
-router.delete("/userDelete/:id", deleteUser);
+router.post("/reset-password/:token", resetPassword);
+router.get("/verify-email/:token", verifyEmail);
+
+// Own account only. This router sits above the global gate, so authMiddleware
+// is added per route here.
+router.put("/change-password/:userId", authMiddleware, requireSelfOrAdmin("userId"), changePassword);
+router.get("/searchUser/:id", authMiddleware, requireSelfOrAdmin("id"), getUserById);
+router.put("/updateUser/:id", authMiddleware, requireSelfOrAdmin("id"), updateUserDetails);
 router.get("/login-history", authMiddleware, getLoginHistory);
 router.post("/toggle-2fa", authMiddleware, toggleTwoFactorAuth);
-router.get("/exportUsers", exportUsers);
+
+// Admin only
+router.get("/getAllUsers", authMiddleware, authorizeRoles("admin"), getUsers);
+router.delete("/userDelete/:id", authMiddleware, authorizeRoles("admin"), deleteUser);
+router.get("/exportUsers", authMiddleware, authorizeRoles("admin"), exportUsers);
 
 export default router;

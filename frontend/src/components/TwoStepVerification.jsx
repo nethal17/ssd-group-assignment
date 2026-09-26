@@ -13,17 +13,9 @@ export const TwoStepVerification = ({ email }) => {
     try {
       setLoading(true);
       
-      // First get the user by email
-      const userResponse = await apiService.get('/api/auth/getAllUsers');
-      const user = userResponse.data.data.find(user => user.email === email);
-      
-      if (!user) {
-        throw new Error('User not found');
-      }
-
-      // Then verify the code
+      // server looks up the account by email now
       const response = await apiService.post('/api/auth/verify-two-step-code', {
-        userId: user._id,
+        email,
         code
       });
       
