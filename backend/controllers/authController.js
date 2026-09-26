@@ -214,17 +214,19 @@ export const loginUser = async (req, res) => {
         // password is select:false - opt in only where it is compared
         const user = await User.findOne({ email }).select("+password");
         if (!user) {
-            // Track failed login attempt
-            const failedUser = await User.findOne({ email });
-            if (failedUser) {
-                failedUser.loginHistory.push({
-                    ipAddress: req.ip,
-                    deviceInfo: req.headers['user-agent'],
-                    status: "failed"
-                });
-                await failedUser.save();
-            }
             return res.status(400).json({ msg: "Invalid credentials" });
+        }
+
+        // Progressive account lockout: check for 5+ failed attempts in the last 15 minutes
+        const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+        const recentFailedAttempts = (user.loginHistory || []).filter(entry => 
+            entry.status === "failed" && new Date(entry.timestamp) > fifteenMinutesAgo
+        );
+
+        if (recentFailedAttempts.length >= 5) {
+            return res.status(429).json({ 
+                msg: "Account temporarily locked due to multiple failed login attempts. Please try again after 15 minutes." 
+            });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
@@ -233,9 +235,17 @@ export const loginUser = async (req, res) => {
             user.loginHistory.push({
                 ipAddress: req.ip,
                 deviceInfo: req.headers['user-agent'],
-                status: "failed"
+                status: "failed",
+                timestamp: new Date()
             });
             await user.save();
+
+            if (recentFailedAttempts.length + 1 >= 5) {
+                return res.status(429).json({ 
+                    msg: "Account temporarily locked due to multiple failed login attempts. Please try again after 15 minutes." 
+                });
+            }
+
             return res.status(400).json({ msg: "Invalid credentials" });
         }
 

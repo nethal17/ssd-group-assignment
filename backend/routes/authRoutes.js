@@ -5,16 +5,17 @@ import { authorizeRoles } from "../middleware/roleMiddleware.js";
 import { requireSelfOrAdmin } from "../middleware/ownership.js";
 import { forgotPassword, resetPassword, changePassword} from "../controllers/authController.js";
 import { getUsers, getUserById, updateUserDetails, deleteUser } from "../controllers/authController.js";
+import { authLimiter } from "../middleware/rateLimiter.js";
 
 const router = express.Router();
 
-// Public - how you get a token
+// Public - how you get a token (rate-limited against brute-force attacks)
 router.post("/register", registerUser);
-router.post("/login", loginUser);
-router.post("/verify-two-step-code", verifyTwoStepCode);
+router.post("/login", authLimiter, loginUser);
+router.post("/verify-two-step-code", authLimiter, verifyTwoStepCode);
 router.post("/logout", logoutUser);
-router.post("/forgot-password", forgotPassword);
-router.post("/reset-password/:token", resetPassword);
+router.post("/forgot-password", authLimiter, forgotPassword);
+router.post("/reset-password/:token", authLimiter, resetPassword);
 router.get("/verify-email/:token", verifyEmail);
 
 // Own account only. This router sits above the global gate, so authMiddleware
