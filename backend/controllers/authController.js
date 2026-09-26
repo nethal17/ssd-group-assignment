@@ -616,14 +616,28 @@ export const updateUserDetails = async (req, res) => {
     const { id } = req.params;
 
     try {
-        const { name, email, phone } = req.body;
-        if (!name || !email || !phone) {
-            return res.status(400).json({ message: "Name, email, and phone are required" });
+        // email is not updatable here - unverified changes = account takeover
+        const { name, phone } = req.body;
+
+        if (!name || !phone) {
+            return res.status(400).json({ message: "Name and phone are required" });
         }
 
-        let updatedData = { name, email, phone };
+        if (typeof name !== "string" || !name.trim()) {
+            return res.status(400).json({ message: "Name must be a non-empty string" });
+        }
 
-        const result = await User.findByIdAndUpdate(id, updatedData, { new: true })
+        if (!/^0\d{9}$/.test(phone)) {
+            return res.status(400).json({ message: "Phone must be 10 digits starting with 0" });
+        }
+
+        // V8 keeps email out of the update; V11's allow-list projection decides
+        // what comes back. updatedData is gone - only name and phone are writable.
+        const result = await User.findByIdAndUpdate(
+            id,
+            { name: name.trim(), phone },
+            { new: true, runValidators: true }
+        )
             .select(USER_SAFE_FIELDS)
             .lean();
 
