@@ -10,7 +10,7 @@ import {
   getApprovedProductListings,
   getRandomApprovedProduct,
   getRandomApprovedProductListings
-} from '../controllers/productListingController.js';
+} from '../controllers/ProductListingController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
 
