@@ -278,7 +278,7 @@ export const getTopRandomReviews = async (req, res) => {
 export const getPublishedReviews = async (req, res) => {
   try {
     const { productId } = req.params;
-    const publishedReviews = await Review.find({ productId, status: 'published' }).populate('buyerId');
+    const publishedReviews = await Review.find({ productId, status: 'published' }).populate('buyerId', 'name');
     res.status(200).json(publishedReviews);
   } catch (error) {
     res.status(500).json({ message: "An internal server error occurred" });
