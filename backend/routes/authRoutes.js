@@ -25,9 +25,11 @@ router.put("/updateUser/:id", authMiddleware, requireSelfOrAdmin("id"), updateUs
 router.get("/login-history", authMiddleware, getLoginHistory);
 router.post("/toggle-2fa", authMiddleware, toggleTwoFactorAuth);
 
+// Own account or admin - a user may delete their own account
+router.delete("/userDelete/:id", authMiddleware, requireSelfOrAdmin("id"), deleteUser);
+
 // Admin only
 router.get("/getAllUsers", authMiddleware, authorizeRoles("admin"), getUsers);
-router.delete("/userDelete/:id", authMiddleware, authorizeRoles("admin"), deleteUser);
 router.get("/exportUsers", authMiddleware, authorizeRoles("admin"), exportUsers);
 
 export default router;
