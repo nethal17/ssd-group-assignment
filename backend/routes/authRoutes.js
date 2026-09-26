@@ -6,21 +6,22 @@ import { requireSelfOrAdmin } from "../middleware/ownership.js";
 import { forgotPassword, resetPassword, changePassword} from "../controllers/authController.js";
 import { getUsers, getUserById, updateUserDetails, deleteUser } from "../controllers/authController.js";
 import { startGoogleLogin, googleCallback } from "../controllers/oauthController.js";
+import { authLimiter } from "../middleware/rateLimiter.js";
 
 const router = express.Router();
 
-// Public - how you get a token
+// Public - how you get a token (rate-limited against brute-force attacks)
 router.post("/register", registerUser);
-router.post("/login", loginUser);
-router.post("/verify-two-step-code", verifyTwoStepCode);
+router.post("/login", authLimiter, loginUser);
+router.post("/verify-two-step-code", authLimiter, verifyTwoStepCode);
 router.post("/logout", logoutUser);
-router.post("/forgot-password", forgotPassword);
-router.post("/reset-password/:token", resetPassword);
+router.post("/forgot-password", authLimiter, forgotPassword);
+router.post("/reset-password/:token", authLimiter, resetPassword);
 router.get("/verify-email/:token", verifyEmail);
 
 // OIDC federated login - public, because this is how you get a token
-router.get("/google", startGoogleLogin);
-router.get("/google/callback", googleCallback);
+router.get("/google", authLimiter, startGoogleLogin);
+router.get("/google/callback", authLimiter, googleCallback);
 
 // Own account only. This router sits above the global gate, so authMiddleware
 // is added per route here.
