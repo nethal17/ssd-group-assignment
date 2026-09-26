@@ -48,6 +48,31 @@ jobs:
           find controllers middleware models routes utils -name '*.js' -print0 \
             | xargs -0 -I{} node --input-type=module -e "await import('./{}')"
 
+      - name: Import path case check
+        # The runner is case-sensitive, macOS is not - a wrong-case import works
+        # locally and breaks here. Covers index.js, which the import check skips.
+        run: |
+          node -e '
+            const fs=require("fs"), path=require("path");
+            const walk=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>{
+              if(e.name==="node_modules"||e.name.startsWith("."))return[];
+              const p=path.join(d,e.name);
+              return e.isDirectory()?walk(p):(p.endsWith(".js")?[p]:[]);});
+            let bad=0;
+            for(const f of walk(".")){
+              for(const m of fs.readFileSync(f,"utf8")
+                  .matchAll(/(?:from|import)\s+["\x27](\.[^"\x27]+)["\x27]/g)){
+                const t=path.resolve(path.dirname(f),m[1]);
+                const d=path.dirname(t), b=path.basename(t);
+                if(fs.existsSync(d)&&!fs.readdirSync(d).includes(b)){
+                  console.error(`broken import in ${f}: ${m[1]}`); bad++;
+                }
+              }
+            }
+            if(bad) process.exit(1);
+            console.log("all imports resolve case-correctly");
+          '
+
   frontend-build:
     name: Frontend build
     runs-on: ubuntu-latest

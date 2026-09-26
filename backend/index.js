@@ -30,7 +30,7 @@ import ProductListingRoutes from './routes/ProductListingRoutes.js';
 import checkoutRoutes from "./routes/checkout.routes.js";
 import buyerAddressRoutes from "./routes/buyerAddressRoutes.js";
 
-import MarketplaceRoutes from './routes/MarketplaceRoutes.js';
+import MarketplaceRoutes from './routes/MarketPlaceRoutes.js';
 
 
 import refundRoutes from './routes/refund.routes.js';
