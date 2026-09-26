@@ -1,5 +1,5 @@
 import express from "express";
-import { registerUser, loginUser, logoutUser, verifyEmail, verifyTwoStepCode, getLoginHistory, toggleTwoFactorAuth, exportUsers } from "../controllers/authController.js";
+import { registerUser, loginUser, logoutUser, verifyEmail, verifyTwoStepCode, getLoginHistory, toggleTwoFactorAuth, exportUsers, refreshToken } from "../controllers/authController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { authorizeRoles } from "../middleware/roleMiddleware.js";
 import { requireSelfOrAdmin } from "../middleware/ownership.js";
@@ -13,6 +13,7 @@ const router = express.Router();
 router.post("/register", registerUser);
 router.post("/login", authLimiter, loginUser);
 router.post("/verify-two-step-code", authLimiter, verifyTwoStepCode);
+router.post("/refresh-token", refreshToken);
 router.post("/logout", logoutUser);
 router.post("/forgot-password", authLimiter, forgotPassword);
 router.post("/reset-password/:token", authLimiter, resetPassword);

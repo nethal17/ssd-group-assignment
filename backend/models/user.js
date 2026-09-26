@@ -43,7 +43,8 @@ const UserSchema = new mongoose.Schema({
         deviceInfo: String,
         status: { type: String, enum: ["success", "failed"], required: true }
     }],
-    lastSecurityUpdate: { type: Date, default: null }
+    lastSecurityUpdate: { type: Date, default: null },
+    tokenVersion: { type: Number, default: 0 }
 
 }, { timestamps: true });
 
