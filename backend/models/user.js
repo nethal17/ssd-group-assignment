@@ -14,6 +14,9 @@ const UserSchema = new mongoose.Schema({
     verificationToken: { type: String }, 
     twoStepVerificationCode: { type: String }, 
     twoStepVerificationExpire: { type: Date },
+    twoStepVerificationAttempts: { type: Number, default: 0 },
+    mfaTicket: { type: String },
+    mfaTicketExpire: { type: Date },
     twoFactorEnabled: { type: Boolean, default: false },
     loginHistory: [{
         timestamp: { type: Date, default: Date.now },
