@@ -63,6 +63,8 @@ import Refund from './components/refund';
 import VehicleRegPage from './pages/VehicleReg';
 import DeliveryHistoryDashboard from './pages/DeliveryHistoryDashboard';
 import { Analysis } from "./components/Analysis";
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { Unauthorized } from './pages/Unauthorized';
 
 
 function App() {
@@ -74,7 +76,16 @@ function App() {
       <Route path="/register" element={<SignUp />} />
       <Route path="/profile" element={<Profile />} />
       <Route path="/profile/update-details" element={< UpdateDetails />} />
-      <Route path="/admin-dashboard" element={<AdminDashboard />} />
+      {/* UX guard only - real enforcement is server-side (V6) */}
+      <Route
+        path="/admin-dashboard"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/unauthorized" element={<Unauthorized />} />
       <Route path="/all" element={<AllUsers />} />
       <Route path="/all-users" element={<DisplayAllUsers />} />
       <Route path="/all-buyers" element={<DisplayAllBuyers />} />
