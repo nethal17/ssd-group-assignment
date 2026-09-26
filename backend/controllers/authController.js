@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+import { signAccessToken } from "../utils/token.js";
 
 export const blacklistedTokens = new Set();
 
@@ -257,8 +258,7 @@ export const loginUser = async (req, res) => {
         });
         await user.save();
 
-        // role goes in the token - the role checks read it off req.user
-        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" });
+        const token = signAccessToken(user);
         
         // Send complete user data in response
         res.json({ 
@@ -450,11 +450,7 @@ export const verifyTwoStepCode = async (req, res) => {
             user.twoStepVerificationExpire = undefined;
             await user.save();
 
-            const token = jwt.sign(
-                { id: user._id, role: user.role },
-                process.env.JWT_SECRET,
-                { expiresIn: "1d" }
-            );
+            const token = signAccessToken(user);
 
             // Return a single response with all necessary data
             res.json({ 
