@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import Marketplace from '../models/Marketplace.js';
 import mongoose from 'mongoose';
 import nodemailer from "nodemailer";
+import { escapeHtml } from '../utils/escapeHtml.js';
 import { User } from "../models/user.js";
 
 
@@ -255,13 +256,13 @@ export const approveProductListing = async (req, res) => {
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <h2 style="color: #4CAF50;">AgriWaste Management</h2>
-                    <p>Dear ${listing.farmerId.name || 'Valued Farmer'},</p>
+                    <p>Dear ${escapeHtml(listing.farmerId.name || 'Valued Farmer')},</p>
                     
                     <p>We're pleased to inform you that your product listing has been approved!</p>
                     
                     <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0;">
                         <h3 style="margin-top: 0;">Product Details</h3>
-                        <p><strong>Product Name:</strong> ${listing.wasteItem}</p>
+                        <p><strong>Product Name:</strong> ${escapeHtml(listing.wasteItem)}</p>
                         <p><strong>Quantity:</strong> ${listing.quantity} kg</p>
                         <p><strong>Price:</strong> Rs. ${listing.price} per kg</p>
                         <p><strong>Status:</strong> Approved</p>
@@ -288,7 +289,8 @@ export const approveProductListing = async (req, res) => {
 export const deleteProductListing = async (req, res) => {
   try {
     const { listingId } = req.params;
-    const { reason, farmerEmail, productName } = req.body;
+    // Recipient and product name come from the stored listing, never from the request
+    const { reason } = req.body;
 
     const deletedListing = await ProductListing.findByIdAndDelete(listingId).populate('farmerId', 'name email');
     if (!deletedListing) {
@@ -306,21 +308,21 @@ export const deleteProductListing = async (req, res) => {
         });
 
         const mailOptions = {
-            to: farmerEmail || deletedListing.farmerId.email,
+            to: deletedListing.farmerId.email,
             from: process.env.EMAIL_USER,
-            subject: `Your ${productName || deletedListing.wasteItem} Listing Has Been Declined`,
+            subject: `Your ${deletedListing.wasteItem} Listing Has Been Declined`,
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <h2 style="color: #4CAF50;">AgriWaste Management</h2>
-                    <p>Dear ${deletedListing.farmerId.name || 'Valued Farmer'},</p>
+                    <p>Dear ${escapeHtml(deletedListing.farmerId.name || 'Valued Farmer')},</p>
                     
                     <p>We regret to inform you that your product listing has been declined by our admin team.</p>
                     
                     <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0;">
                         <h3 style="margin-top: 0;">Product Details</h3>
-                        <p><strong>Product Name:</strong> ${productName || deletedListing.wasteItem}</p>
+                        <p><strong>Product Name:</strong> ${escapeHtml(deletedListing.wasteItem)}</p>
                         <p><strong>Status:</strong> Declined</p>
-                        ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+                        ${reason ? `<p><strong>Reason:</strong> ${escapeHtml(reason)}</p>` : ''}
                     </div>
                     
                     <p>If you would like more information about this decision or would like to submit a revised listing, 

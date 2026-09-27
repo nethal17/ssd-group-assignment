@@ -241,7 +241,7 @@ export const OrderHistoryPage = ({ checkoutData }) => {
         orderDate: order.orderDate,
         //refundDate: new Date().toISOString(),
         refundReason: "Order cancelled by user",
-        refundStatus: "pending"
+        // refundStatus is set by the server (always "pending" for a new refund)
       };
 
       console.log('Sending refund data:', refundData); // Debug log

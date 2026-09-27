@@ -6,11 +6,13 @@ import { User } from '../models/user.js';
 import mongoose from 'mongoose';
 import Product from '../models/Product.js';
 import { authMiddleware } from "../middleware/authMiddleware.js";
+import { validate } from "../validation/validate.js";
+import { addInventoryBody, editInventoryBody, inventoryIdParams } from "../validation/schemas/listing.schemas.js";
 
 const router = express.Router();
 
 // Farmer lists agri-waste
-router.post('/addproduct', authMiddleware, async (req, res) => {
+router.post('/addproduct', authMiddleware, validate({ body: addInventoryBody }), async (req, res) => {
   try {
     // Extract farmerId from the authenticated user
     const farmerId = req.user.id; // Assuming `req.user` is set by authMiddleware
@@ -68,7 +70,7 @@ router.get('/pending', async (req, res) => {
 });
 
 // Inventory manager approves product
-router.put('/approve/:id', async (req, res) => {
+router.put('/approve/:id', validate({ params: inventoryIdParams }), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -119,12 +121,17 @@ router.get('/approved', async (req, res) => {
 });
 
 // Inventory manager edits product
-router.put('/edit/:id', async (req, res) => {
+router.put('/edit/:id', validate({ params: inventoryIdParams, body: editInventoryBody }), async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    // Only the validated product fields; status/farmerId change through their own flows
+    const { productName, description, quantity, price, photo, expireDate } = req.body;
+    const updates = Object.fromEntries(
+      Object.entries({ productName, description, quantity, price, photo, expireDate })
+        .filter(([, value]) => value !== undefined)
+    );
 
-    const inventoryItem = await Inventory.findByIdAndUpdate(id, updates, { new: true });
+    const inventoryItem = await Inventory.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
     if (!inventoryItem) {
       return res.status(404).json({ message: 'Inventory item not found' });
     }
@@ -136,7 +143,7 @@ router.put('/edit/:id', async (req, res) => {
 });
 
 // Inventory manager deletes product
-router.delete('/delete/:id', async (req, res) => {
+router.delete('/delete/:id', validate({ params: inventoryIdParams }), async (req, res) => {
   try {
     const { id } = req.params;
 

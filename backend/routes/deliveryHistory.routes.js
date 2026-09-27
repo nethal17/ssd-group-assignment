@@ -5,6 +5,8 @@ import {
   declineOrder, 
   markAsDone 
 } from "../controllers/deliveryHistory.controller.js";
+import { validate } from "../validation/validate.js";
+import { idParam } from "../validation/schemas/commerce.schemas.js";
 
 const router = express.Router();
 
@@ -12,12 +14,12 @@ const router = express.Router();
 router.get("/", getAllDeliveryOrders);
 
 // Accept an order
-router.put("/:id/accept", acceptOrder);
+router.put("/:id/accept", validate({ params: idParam }), acceptOrder);
 
 // Decline an order
-router.put("/:id/decline", declineOrder);
+router.put("/:id/decline", validate({ params: idParam }), declineOrder);
 
 // Mark order as done
-router.put("/:id/mark-done", markAsDone);
+router.put("/:id/mark-done", validate({ params: idParam }), markAsDone);
 
 export default router; 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiService, API_URL } from "../utils/api";
-import toast from "react-hot-toast";
+import toast, { Toaster } from "react-hot-toast";
 import { Navbar } from "../components/Navbar";
 
 export const UpdateDetails = () => {
@@ -9,8 +9,6 @@ export const UpdateDetails = () => {
     name: "",
     email: "",
     phone: "",
-    password: "",
-    confirmPassword: "",
   });
 
   const [loading, setLoading] = useState(true);
@@ -36,8 +34,6 @@ export const UpdateDetails = () => {
           name: response.data.name || "",
           email: response.data.email || "",
           phone: response.data.phone || "",
-          password: "", 
-          confirmPassword: "",
         });
 
       } catch (error) {
@@ -76,25 +72,15 @@ export const UpdateDetails = () => {
       return;
     }
 
-    if (user.password !== user.confirmPassword) {
-      toast.error("Passwords do not match.");
-      return;
-    }
-
-    if (user.password && user.password.length < 8) {
-      toast.error("Password must be at least 8 characters long.");
-      return;
-    }
-
     try {
       const userData = JSON.parse(localStorage.getItem("user") || "{}");
       const userId = userData._id;
 
+      // Only name and phone are editable here. Email is the account-recovery channel
+      // and passwords change through Profile > Security, which verifies the current one.
       const updatePayload = {
         name: user.name,
-        email: user.email,
         phone: user.phone,
-        ...(user.password && { password: user.password }), // Only send password if user entered a new one
       };
 
       await apiService.put(
@@ -106,7 +92,7 @@ export const UpdateDetails = () => {
       navigate("/profile"); // Redirect after update
 
     } catch (error) {
-      toast.error("Failed to update details.");
+      toast.error(error.response?.data?.message || "Failed to update details.");
       console.error(error);
     }
   };
@@ -157,26 +143,9 @@ export const UpdateDetails = () => {
                 className="w-full px-4 py-3 border border-gray-300 rounded-3xl focus:outline-none focus:ring-2 focus:ring-green-500"
               />
             </div>
-            <div className="mb-6">
-              <input
-                type="password"
-                placeholder="Password"
-                name="password"
-                value={user.password}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-3xl focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-            </div>
-            <div className="mb-6">
-              <input
-                type="password"
-                placeholder="Confirm Password"
-                name="confirmPassword"
-                value={user.confirmPassword}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-3xl focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-            </div>
+            <p className="mb-6 text-sm text-gray-500">
+              To change your password, use Profile &gt; Security &gt; Change Password.
+            </p>
             <div className="mb-6">
               <button
                 type="submit"
@@ -189,7 +158,6 @@ export const UpdateDetails = () => {
           </form>
         </div>
       </div>
-      <Toaster position="top-center" richColors />
     </div>
   );
 };

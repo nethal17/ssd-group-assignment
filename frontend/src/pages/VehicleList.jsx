@@ -59,7 +59,16 @@ const VehicleList = () => {
     try {
       const response = await apiService.put(
         `/api/vehicle-reg/${selectedVehicle._id}`,
-        selectedVehicle
+        // Only the editable fields; _id, timestamps and __v are server-controlled
+        {
+          nic: selectedVehicle.nic,
+          licenseNumber: selectedVehicle.licenseNumber,
+          licenseExpiry: selectedVehicle.licenseExpiry,
+          address: selectedVehicle.address,
+          preferredDistrict: selectedVehicle.preferredDistrict,
+          vehicleType: selectedVehicle.vehicleType,
+          vehicleNumber: selectedVehicle.vehicleNumber,
+        }
       );
       
       setVehicles(vehicles.map(vehicle => 

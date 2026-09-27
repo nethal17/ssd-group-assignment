@@ -3,38 +3,18 @@ import mongoose from "mongoose";
 
 export const createRefund = async (req, res) => {
   try {
-    const { userId, productName, quantity, totalPrice, orderDate, canceledDate, refundStatus, refundReason } = req.body;
+    // Body is validated by createRefundBody. Status is never taken from the client:
+    // every new refund starts as pending and only the status endpoint moves it on.
+    const { userId, productName, quantity, totalPrice, orderDate, refundReason } = req.body;
 
-    // Log received data for debugging
-    console.log('Received refund data:', req.body);
-
-    // Validate required fields
-    const missingFields = [];
-    if (!userId) missingFields.push('userId');
-    if (!productName) missingFields.push('productName');
-    if (!quantity) missingFields.push('quantity');
-    if (!totalPrice) missingFields.push('totalPrice');
-    if (!orderDate) missingFields.push('orderDate');
-    if (!refundStatus) missingFields.push('refundStatus');
-    if (!refundReason) missingFields.push('refundReason');
-
-    if (missingFields.length > 0) {
-      return res.status(400).json({ 
-        message: "Missing required fields",
-        missingFields,
-        received: req.body
-      });
-    }
-
-    // Create refund record
     const refund = new Refund({
       userId: new mongoose.Types.ObjectId(userId),
       productName,
-      quantity: Number(quantity),
-      totalPrice: Number(totalPrice),
-      orderDate: new Date(orderDate),
+      quantity,
+      totalPrice,
+      orderDate,
       refundReason,
-      refundStatus: refundStatus || "pending"
+      refundStatus: "pending"
     });
 
     // Save the refund record
@@ -73,7 +53,7 @@ export const updateRefundStatus = async (req, res) => {
     const refund = await Refund.findByIdAndUpdate(
       refundId,
       { refundStatus: status },
-      { new: true }
+      { new: true, runValidators: true }
     );
 
     if (!refund) {

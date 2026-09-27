@@ -31,7 +31,9 @@ const FarmerReqForm = () => {
   };
 
   const handleUpdateSubmit = () => {
-    apiService.put(`/api/deliveryReq/update-farmer/${selectedFarmer._id}`, updatedFarmer)
+    // Only the fields this form edits; the rest of the request is server-controlled
+    const { farmerId, farmerPhone, district } = updatedFarmer;
+    apiService.put(`/api/deliveryReq/update-farmer/${selectedFarmer._id}`, { farmerId, farmerPhone, district })
       .then(() => {
         setIsUpdateModalOpen(false);
         window.location.reload();

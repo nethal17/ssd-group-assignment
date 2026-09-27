@@ -13,6 +13,8 @@ import {
 } from '../controllers/ProductListingController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
+import { validate } from "../validation/validate.js";
+import { createListingBody, listingIdParams, declineListingBody } from "../validation/schemas/listing.schemas.js";
 
 
 const router = express.Router();
@@ -23,7 +25,7 @@ router.get('/waste-items/:wasteType', getWasteItems);
 router.get('/districts/:province', getDistricts);
 
 // Route for creating a product listing
-router.post('/create', authMiddleware, createProductListing);
+router.post('/create', authMiddleware, validate({ body: createListingBody }), createProductListing);
 
 // Route for getting only approved product listings
 router.get('/listings/approved', getApprovedProductListings);
@@ -34,7 +36,7 @@ router.get('/random-approved-listings', getRandomApprovedProductListings);
 
 // Admin routes
 router.get('/admin/listings', authMiddleware, authorizeRoles("admin"), getAllProductListings);
-router.put('/admin/approve/:listingId', authMiddleware, authorizeRoles("admin"), approveProductListing);
-router.delete('/admin/delete/:listingId', authMiddleware, authorizeRoles("admin"), deleteProductListing);
+router.put('/admin/approve/:listingId', authMiddleware, authorizeRoles("admin"), validate({ params: listingIdParams }), approveProductListing);
+router.delete('/admin/delete/:listingId', authMiddleware, authorizeRoles("admin"), validate({ params: listingIdParams, body: declineListingBody }), deleteProductListing);
 
 export default router;

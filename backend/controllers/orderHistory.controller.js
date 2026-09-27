@@ -5,7 +5,9 @@ import ProductListing from "../models/ProductListing.js";
 //Add Order History
 export const addOrderHistory = async (req, res) => {
   try {
-    const newOrder = new OrderHistory(req.body);
+    // Only the validated fields are written; orderStatus/orderDate stay server-controlled
+    const { userId, productId, farmerId, productName, quantity, totalPrice } = req.body;
+    const newOrder = new OrderHistory({ userId, productId, farmerId, productName, quantity, totalPrice });
     const savedOrder = await newOrder.save();
     res.status(201).json(savedOrder);
   } catch (error) {

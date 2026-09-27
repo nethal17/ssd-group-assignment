@@ -60,13 +60,14 @@ const DriverList = () => {
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
-      await apiService.put(`/api/auth/updateUser/${editingDriver._id}`, values);
+      // Email is not editable here (account-recovery channel); only name and phone are sent
+      await apiService.put(`/api/auth/updateUser/${editingDriver._id}`, { name: values.name, phone: values.phone });
       message.success('Driver updated successfully');
       setIsModalVisible(false);
       fetchDrivers();
     } catch (error) {
       console.error('Error updating driver:', error);
-      message.error('Failed to update driver');
+      message.error(error.response?.data?.message || 'Failed to update driver');
     }
   };
 
@@ -185,7 +186,7 @@ const DriverList = () => {
               { type: 'email', message: 'Please enter a valid email!' }
             ]}
           >
-            <input />
+            <input disabled title="Email cannot be changed here" />
           </Form.Item>
           <Form.Item
             name="phone"
