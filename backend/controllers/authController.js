@@ -1,10 +1,17 @@
 import { User } from "../models/user.js";
+import { RefreshToken } from "../models/refreshToken.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import mongoose from "mongoose";
 import nodemailer from "nodemailer";
-import { signAccessToken } from "../utils/token.js";
+import { 
+    signAccessToken, 
+    generateRefreshToken, 
+    hashRefreshToken, 
+    setRefreshTokenCookie, 
+    clearRefreshTokenCookie 
+} from "../utils/token.js";
 import { USER_SAFE_FIELDS, toUserDTO, toAdminUserSummary } from "../utils/userSerializer.js";
 import {
     generateToken,
@@ -21,8 +28,6 @@ const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${process.env.P
 // Same response whether or not the account exists, so these endpoints can't be used to enumerate emails
 const RESET_REQUESTED_MSG = "If an account exists for that email, a password reset link has been sent.";
 const VERIFICATION_RESENT_MSG = "If an unverified account exists for that email, a new verification link has been sent.";
-
-export const blacklistedTokens = new Set();
 
 // 2FA state is select:false on the model; verifyTwoStepCode must opt in to read it
 const TWO_FACTOR_FIELDS =
@@ -351,6 +356,16 @@ export const loginUser = async (req, res) => {
 
         const token = signAccessToken(user);
         
+        // Persist hashed refresh token with 7-day TTL and issue secure httpOnly cookie
+        const rawRefreshToken = generateRefreshToken();
+        const tokenHash = hashRefreshToken(rawRefreshToken);
+        await RefreshToken.create({
+            user: user._id,
+            tokenHash,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        });
+        setRefreshTokenCookie(res, rawRefreshToken);
+
         // Send complete user data in response
         res.json({ 
             token, 
@@ -372,42 +387,83 @@ export const loginUser = async (req, res) => {
     }
 };
 
-export const logoutUser = (req, res) => {
-    const token = req.headers.authorization?.split(" ")[1];
+export const logoutUser = async (req, res) => {
+    try {
+        const incomingToken = req.cookies?.refreshToken || req.body?.refreshToken;
+        if (incomingToken) {
+            const incomingHash = hashRefreshToken(incomingToken);
+            await RefreshToken.findOneAndUpdate({ tokenHash: incomingHash }, { revoked: true });
+        }
 
-    if (!token) {
-        console.log("Logout failed: No token provided");
-        return res.status(400).json({ message: "No token provided" });
+        clearRefreshTokenCookie(res);
+        return res.status(200).json({ message: "Logged out successfully" });
+    } catch (err) {
+        console.error("Logout error:", err);
+        return res.status(500).json({ message: "An internal server error occurred" });
     }
+};
 
-    if (blacklistedTokens.has(token)) {
-        return res.status(401).json({ msg: "You are already logged out. Please log in." });
+/**
+ * Exchange a valid refresh token cookie for a new short-lived access token
+ * with Refresh Token Rotation (RTR).
+ */
+export const refreshToken = async (req, res) => {
+    const incomingToken = req.cookies?.refreshToken || req.body?.refreshToken;
+
+    if (!incomingToken) {
+        return res.status(401).json({ msg: "No refresh token provided" });
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const incomingHash = hashRefreshToken(incomingToken);
+        const tokenRecord = await RefreshToken.findOne({ tokenHash: incomingHash });
 
-        blacklistedTokens.add(token);
-        console.log("Token blacklisted:", token);
+        if (!tokenRecord) {
+            return res.status(401).json({ msg: "Invalid refresh token" });
+        }
 
-        res.clearCookie("refreshToken", {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
+        if (tokenRecord.revoked) {
+            // Token reuse detected - invalidate all sessions for this user as a safeguard
+            await RefreshToken.updateMany({ user: tokenRecord.user }, { revoked: true });
+            clearRefreshTokenCookie(res);
+            return res.status(401).json({ msg: "Refresh token has been revoked" });
+        }
+
+        if (new Date(tokenRecord.expiresAt) <= new Date()) {
+            clearRefreshTokenCookie(res);
+            return res.status(401).json({ msg: "Refresh token has expired. Please log in again." });
+        }
+
+        const user = await User.findById(tokenRecord.user);
+        if (!user) {
+            clearRefreshTokenCookie(res);
+            return res.status(401).json({ msg: "User no longer exists" });
+        }
+
+        // Refresh Token Rotation: revoke used token, record successor, and issue fresh token
+        const newRawRefreshToken = generateRefreshToken();
+        const newHash = hashRefreshToken(newRawRefreshToken);
+
+        tokenRecord.revoked = true;
+        tokenRecord.replacedByTokenHash = newHash;
+        await tokenRecord.save();
+
+        await RefreshToken.create({
+            user: user._id,
+            tokenHash: newHash,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         });
 
-        res.status(200).json({ message: "Logged out successfully" });
+        setRefreshTokenCookie(res, newRawRefreshToken);
+        const newAccessToken = signAccessToken(user);
+
+        return res.json({
+            token: newAccessToken,
+            user: toUserDTO(user)
+        });
     } catch (err) {
-        console.error("Logout error:", err);
-
-        if (err.name === "JsonWebTokenError") {
-            return res.status(401).json({ msg: "Invalid token" });
-        }
-
-        if (err.name === "TokenExpiredError") {
-            return res.status(401).json({ msg: "Token has expired" });
-        }
-
-        res.status(500).json({ msg: "Server Error" });
+        console.error("Error refreshing token:", err);
+        return res.status(500).json({ msg: "Server Error" });
     }
 };
 
@@ -543,6 +599,10 @@ export const resetPassword = async (req, res) => {
             return res.status(400).json({ msg: "This reset link is invalid or has expired." });
         }
 
+        // Invalidate all active refresh tokens across all devices
+        await RefreshToken.updateMany({ user: user._id }, { revoked: true });
+        clearRefreshTokenCookie(res);
+
         res.json({ msg: "Password successfully reset" });
 
     } catch (err) {
@@ -642,6 +702,16 @@ export const verifyTwoStepCode = async (req, res) => {
         await user.save();
 
         const token = signAccessToken(user);
+
+        // Persist hashed refresh token with 7-day TTL and issue secure httpOnly cookie
+        const rawRefreshToken = generateRefreshToken();
+        const tokenHash = hashRefreshToken(rawRefreshToken);
+        await RefreshToken.create({
+            user: user._id,
+            tokenHash,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        });
+        setRefreshTokenCookie(res, rawRefreshToken);
 
         return res.json({ 
             token, 
@@ -785,7 +855,12 @@ export const changePassword = async (req, res) => {
 
         user.password = hashedPassword;
         user.lastSecurityUpdate = new Date();
+        user.tokenVersion = (user.tokenVersion || 0) + 1;
         await user.save();
+
+        // Invalidate all active refresh tokens across all devices
+        await RefreshToken.updateMany({ user: user._id }, { revoked: true });
+        clearRefreshTokenCookie(res);
 
         res.status(200).json({ message: "Password changed successfully" });
     } catch (err) {

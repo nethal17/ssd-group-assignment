@@ -47,7 +47,7 @@ const UserSchema = new mongoose.Schema({
         status: { type: String, enum: ["success", "failed"], required: true }
     }],
     lastSecurityUpdate: { type: Date, default: null },
-    // Embedded in every access token as "tv"; incrementing it revokes all existing sessions.
+    // Embedded in every access token; incrementing it revokes all existing sessions.
     // Selected by default so every token-issuing path has it (never serialised - see above).
     tokenVersion: { type: Number, default: 0 }
 
