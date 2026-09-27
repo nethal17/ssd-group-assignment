@@ -15,6 +15,7 @@ export const signAccessToken = (user) => {
         sub: user._id.toString(),
         id: user._id.toString(),
         role: user.role,
+        // Session generation; authMiddleware rejects tokens whose tokenVersion no longer matches the user
         tokenVersion: user.tokenVersion || 0
     };
 

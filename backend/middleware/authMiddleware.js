@@ -39,13 +39,10 @@ export const authMiddleware = async (req, res, next) => {
             return res.status(401).json({ msg: "User no longer exists or authorization revoked" });
         }
 
-        // Token revocation check: if user's tokenVersion was bumped (e.g., password change or global logout),
-        // reject access tokens issued prior to the bump.
-        if (
-            decoded.tokenVersion !== undefined &&
-            user.tokenVersion !== undefined &&
-            decoded.tokenVersion !== user.tokenVersion
-        ) {
+        // Token revocation check: tokenVersion is bumped on password reset/change (and global logout),
+        // which rejects every access token issued before the bump. A token without the claim counts
+        // as version 0, so it cannot skip the check once the user's version has moved on.
+        if ((decoded.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) {
             return res.status(401).json({ msg: "Session has been invalidated. Please log in again." });
         }
 

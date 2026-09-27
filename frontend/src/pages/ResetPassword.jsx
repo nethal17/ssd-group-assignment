@@ -30,12 +30,18 @@ export const ResetPassword = () => {
       return;
     }
 
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters long.");
+      setLoading(false);
+      return;
+    }
+
     try {
       await apiService.post(`/api/auth/reset-password/${token}`, { password });
       toast.success("Password successfully reset.");
       navigate("/login");
     } catch (error) {
-      toast.error("Failed to reset password.");
+      toast.error(error.response?.data?.msg || "Failed to reset password.");
       console.error(error);
     } finally {
       setLoading(false);
