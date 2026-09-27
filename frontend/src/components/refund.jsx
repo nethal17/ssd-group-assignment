@@ -20,6 +20,8 @@ const Refund = () => {
     totalAmount: 0
   });
 
+  const FRONTEND_URL = import.meta.env.VITE_FRONTEND_URL;
+
   useEffect(() => {
     fetchRefunds();
   }, []);  
@@ -58,8 +60,8 @@ const Refund = () => {
         totalSalary: refund.totalPrice,
         driverId: refund.userId._id,
         driverName: refund.userId.name,
-        success_url: 'http://localhost:5173/success',
-        cancel_url: 'http://localhost:5173/refunds'
+        success_url: `${FRONTEND_URL}/success`,
+        cancel_url: `${FRONTEND_URL}/refunds`
       });
 
       if (response.data.url) {

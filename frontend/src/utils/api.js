@@ -12,9 +12,9 @@ import axios from 'axios';
  */
 
 // Get the API base URL from environment variables
-// In development: http://localhost:3000
+// In development: your development backend URL
 // In production: your deployed backend URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 // Create axios instance with default configuration
 const api = axios.create({
