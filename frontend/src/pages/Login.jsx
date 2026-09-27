@@ -12,12 +12,14 @@ export const Login = () => {
   const [showVerification, setShowVerification] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [mfaTicket, setMfaTicket] = useState('');
+  const [needsEmailVerification, setNeedsEmailVerification] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
       setLoading(true);
+      setNeedsEmailVerification(false);
       const response = await apiService.post("/api/auth/login", {
         email,
         password,
@@ -36,7 +38,9 @@ export const Login = () => {
       }
     } catch (error) {
       console.error("Login error:", error);
-      toast.error(error.response?.data?.msg || "Login failed");
+      const msg = error.response?.data?.msg;
+      setNeedsEmailVerification(/verify your email/i.test(msg || ""));
+      toast.error(msg || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -132,6 +136,18 @@ export const Login = () => {
                 Forgot password?
               </Link>
             </div>
+
+            {needsEmailVerification && (
+              <p className="text-sm text-center text-gray-600">
+                Didn&apos;t get the email or the link expired?{" "}
+                <Link
+                  to="/resend-verification"
+                  className="font-medium text-emerald-600 hover:text-emerald-500 hover:underline"
+                >
+                  Resend verification email
+                </Link>
+              </p>
+            )}
             
             <button
               type="submit"
