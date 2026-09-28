@@ -20,6 +20,8 @@ const FarmerPaymentNew = () => {
     errorMessage: null
   });
 
+  const FRONTEND_URL = import.meta.env.VITE_FRONTEND_URL;
+
   useEffect(() => {
     console.log("FarmerPaymentNew component mounted with ID:", id);
     
@@ -132,8 +134,8 @@ const FarmerPaymentNew = () => {
         userId: id,
         amount: totalAmount * 100, // Convert to cents
         currency: "LKR",
-        success_url: "http://localhost:5173/success",
-        cancel_url: "http://localhost:5173/farmer-list",
+        success_url: `${FRONTEND_URL}/success`,
+        cancel_url: `${FRONTEND_URL}/farmer-list`,
         customerEmail: farmer.email
       });
       

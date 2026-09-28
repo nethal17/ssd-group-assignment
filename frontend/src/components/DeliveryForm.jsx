@@ -187,7 +187,7 @@ const DeliveryForm = () => {
         )}
 
         <label style={{ fontSize: '14px', color: '#555', marginBottom: '5px', display: 'block' }}>Location:</label>
-        <LoadScript googleMapsApiKey="AIzaSyBvdWTRDRIKWd11ClIGYQrSfc883IEkRiw">
+        <LoadScript googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
           <GoogleMap
             id="map"
             mapContainerStyle={{ width: '100%', height: '400px' }}

@@ -22,8 +22,8 @@ import {
 } from "../utils/authTokens.js";
 
 // Public base URLs used in emailed links and redirects
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
-const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
+const FRONTEND_URL = process.env.FRONTEND_URL;
+const BACKEND_URL = process.env.BACKEND_URL;
 
 // Same response whether or not the account exists, so these endpoints can't be used to enumerate emails
 const RESET_REQUESTED_MSG = "If an account exists for that email, a password reset link has been sent.";
@@ -918,7 +918,7 @@ export const deleteUser = async (req, res) => {
                             <p style="color: #34495e;">If you wish to continue using our services, you can register a new account by clicking the button below:</p>
                             
                             <div style="text-align: center; margin: 30px 0;">
-                                <a href="http://localhost:5173/register" style="display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Register with Us</a>
+                                <a href="${FRONTEND_URL}/register" style="display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Register with Us</a>
                             </div>
                             
                             <p style="color: #34495e;">We look forward to having you back in our community!</p>
@@ -972,7 +972,7 @@ export const deleteUser = async (req, res) => {
                         <p style="color: #34495e;">If you wish to reactivate your account, please login to your account using the button below:</p>
                         
                         <div style="text-align: center; margin: 30px 0;">
-                            <a href="http://localhost:5173/login" style="display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Login into your Account</a>
+                            <a href="${FRONTEND_URL}/login" style="display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Login into your Account</a>
                         </div>
                         
                         <p style="color: #34495e;">We look forward to having you back in our community!</p>

@@ -173,7 +173,7 @@ const TruckDriverDashboard = () => {
                 <p><strong>Emergency Contact:</strong> {selectedRequest.emergencyContact}</p>
                 <p className="mt-4"><strong>Location:</strong></p>
 
-                <LoadScript googleMapsApiKey="AIzaSyBvdWTRDRIKWd11ClIGYQrSfc883IEkRiw">
+                <LoadScript googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
                   <GoogleMap
                     id="map"
                     mapContainerStyle={{ width: "100%", height: "400px" }}
