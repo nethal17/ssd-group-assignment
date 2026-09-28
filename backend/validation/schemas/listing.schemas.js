@@ -15,7 +15,7 @@ export const createListingBody = z.strictObject({
     expireDate: futureDate("Expiry date"),
     photo: z.union([z.literal(""), z.null(), httpsUrl("Photo")]).optional(),
     bankName: text("Bank name", 100),
-    accountNumber: z.string({ error: "Account number is required" }).trim().regex(/^[0-9-]{4,30}$/, "Account number may only contain digits"),
+    accountNumber: z.string({ error: "Account number is required" }).trim().regex(/^[0-9-]{4,30}$/, "Account number may only contain digits and hyphens"),
     accountHolderName: text("Account holder name", 100),
     branch: text("Branch", 100),
 });

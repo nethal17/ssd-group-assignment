@@ -49,21 +49,10 @@ export const orderHistoryBody = z.strictObject({
     totalPrice: money("Total price", { allowZero: true }),
 });
 
-// Items are the buyer's cart lines; extra display fields (image, delivery cost, _id)
-// are stripped rather than rejected because the client echoes the cart back.
-const paidCartItem = z.object({
-    wasteId: objectId,
-    farmerId: objectId,
-    description: text("Item description", 500),
-    price: money("Item price", { allowZero: true }),
-    quantity: positiveInt("Item quantity", 100_000).optional(),
-});
-
+// Orders are built from the buyer's server-side cart (priced from the listings, V17).
+// The client only says whose cart it is; item, farmer and price data are never accepted.
 export const processPaymentBody = z.strictObject({
     userId: objectId,
-    cartItems: z.array(paidCartItem, { error: "cartItems must be a list" })
-        .min(1, "Cart is empty")
-        .max(100, "Too many items in one order"),
 });
 
 export const orderIdParams = idParams("orderId");
@@ -93,11 +82,10 @@ export const refundStatusBody = z.strictObject({
 });
 
 // ---- Reviews
+// A review belongs to one of the buyer's own orders. The buyer is the logged-in user and
+// the farmer/product come from that order, so they are not accepted from the client.
 export const addReviewBody = z.strictObject({
-    buyerId: objectId,
     orderId: objectId,
-    farmerId: objectId,
-    productName: text("Product name", 200),
     rating: z.preprocess(
         (v) => (typeof v === "string" && v.trim() !== "" ? Number(v) : v),
         z.number({ error: "Rating must be a number" }).int("Rating must be a whole number").min(1, "Rating must be 1-5").max(5, "Rating must be 1-5"),

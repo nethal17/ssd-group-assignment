@@ -1,6 +1,7 @@
 import OrderHistory from "../models/orderHistory.model.js"; 
 import Cart from "../models/Cart.js";
 import ProductListing from "../models/ProductListing.js";
+import { repriceCart } from "../utils/cartPricing.js";
 
 //Add Order History
 export const addOrderHistory = async (req, res) => {
@@ -96,32 +97,43 @@ export const updateOrderStatus = async (req, res) => {
 // Process order after successful payment
 export const processOrderAfterPayment = async (req, res) => {
   try {
-    const { userId, cartItems } = req.body;
+    const { userId } = req.body;
 
-    // Insert cart items into order history
-    for (const item of cartItems) {
-      const orderData = {
-        userId: userId,
+    // A buyer can only turn their own cart into orders
+    if (req.user?.id !== userId) {
+      return res.status(403).json({ message: "You can only process your own order" });
+    }
+
+    const cart = await Cart.findOne({ userId });
+    if (!cart || cart.items.length === 0) {
+      return res.status(400).json({ message: "Cart is empty" });
+    }
+
+    // Everything recorded comes from the server: listing price, listing farmer and the
+    // cart quantity. Items whose listing is gone or no longer approved are dropped.
+    await repriceCart(cart);
+    if (cart.items.length === 0) {
+      await cart.save();
+      return res.status(409).json({ message: "None of the items in your cart are still available" });
+    }
+
+    for (const item of cart.items) {
+      await OrderHistory.create({
+        userId,
         productId: item.wasteId,
         farmerId: item.farmerId,
         productName: item.description,
-        quantity: item.quantity || 1,
-        totalPrice: item.price * (item.quantity || 1)
-      };
+        quantity: item.quantity,
+        totalPrice: item.price * item.quantity
+      });
 
-      await OrderHistory.create(orderData);
-
-      // Delete the item from Marketplace
+      // The listing is sold, so it leaves the marketplace
       await ProductListing.findByIdAndDelete(item.wasteId);
     }
 
-    // Clear the cart
-    const cart = await Cart.findOne({ userId });
-    if (cart) {
-      cart.items = [];
-      cart.totalPrice = 0;
-      await cart.save();
-    }
+    cart.items = [];
+    cart.totalPrice = 0;
+    await cart.save();
 
     res.status(200).json({ message: "Order processed successfully" });
   } catch (error) {
@@ -129,6 +141,7 @@ export const processOrderAfterPayment = async (req, res) => {
     res.status(500).json({ message: "Failed to process order" });
   }
 };
+
 
 export const acceptOrder = async (req, res) => {
   try {

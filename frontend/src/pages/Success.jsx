@@ -11,7 +11,6 @@ export const Success = () => {
     const processOrder = async () => {
       try {
         const user = JSON.parse(localStorage.getItem("user") || "{}");
-        const cartItems = JSON.parse(localStorage.getItem("cartItems") || "[]");
 
         /*if (!user._id || cartItems.length === 0) {
           toast.error("Invalid order data");
@@ -19,9 +18,9 @@ export const Success = () => {
           return;
         }*/
 
+        // Orders are built on the server from this buyer's cart; no item data is sent
         await apiService.post("/api/order-history/process-payment", {
           userId: user._id,
-          cartItems: cartItems
         });
 
         localStorage.removeItem("cartItems");
