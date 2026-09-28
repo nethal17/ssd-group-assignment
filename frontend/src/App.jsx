@@ -66,6 +66,7 @@ import DeliveryHistoryDashboard from './pages/DeliveryHistoryDashboard';
 import { Analysis } from "./components/Analysis";
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Unauthorized } from './pages/Unauthorized';
+import { OAuthCallback } from './pages/OAuthCallback';
 
 
 function App() {
@@ -74,6 +75,7 @@ function App() {
       <Routes>
         <Route path="/" element={<HomeTesting />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/oauth/callback" element={<OAuthCallback />} />
       <Route path="/register" element={<SignUp />} />
       <Route path="/profile" element={<Profile />} />
       <Route path="/profile/update-details" element={< UpdateDetails />} />
