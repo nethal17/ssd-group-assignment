@@ -19,6 +19,7 @@ import { TwoStepVerification } from './components/TwoStepVerification';
 import Charts from './pages/Charts';
 import PaymentDashboard from './pages/PaymentDashboard';
 import EmailVerificationSuccess from './pages/EmailVerificationSuccess';
+import { ResendVerification } from './pages/ResendVerification';
 import VehicleList from './pages/VehicleList';
 
 import { OrganicWaste, CategoryProducts } from './pages/OrganicWaste';
@@ -101,6 +102,7 @@ function App() {
       <Route path="/charts" element={<Charts />} />
       <Route path="/payment-dashboard" element={<PaymentDashboard />} />
       <Route path="/email-verification-success" element={<EmailVerificationSuccess />} />
+      <Route path="/resend-verification" element={<ResendVerification />} />
 
       <Route path="/organic-waste" element={<OrganicWaste />} />
       <Route path="/non-organic" element={<NonOrganicWaste />} />

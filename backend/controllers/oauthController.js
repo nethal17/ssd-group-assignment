@@ -1,7 +1,13 @@
 import * as client from "openid-client";
 import { User } from "../models/user.js";
 import OidcTransaction from "../models/oidcTransaction.model.js";
-import { signAccessToken } from "../utils/token.js";
+import {
+    signAccessToken,
+    generateRefreshToken,
+    hashRefreshToken,
+    setRefreshTokenCookie
+} from "../utils/token.js";
+import { RefreshToken } from "../models/refreshToken.js";
 import { getOidcConfig, getRedirectUri, OIDC_SCOPE, isOidcConfigured } from "../config/oidc.js";
 
 const frontendUrl = () => process.env.FRONTEND_URL || "http://localhost:5173";
@@ -97,6 +103,17 @@ export const googleCallback = async (req, res) => {
 
         const user = await findOrCreateGoogleUser({ sub, email, name, picture });
         const token = signAccessToken(user);
+
+        // Same session as a local login (V4): access tokens are short-lived, so
+        // without a refresh cookie a federated user would be logged out in 15
+        // minutes with no way back.
+        const rawRefreshToken = generateRefreshToken();
+        await RefreshToken.create({
+            user: user._id,
+            tokenHash: hashRefreshToken(rawRefreshToken),
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        });
+        setRefreshTokenCookie(res, rawRefreshToken);
 
         // Fragment, not query string: fragments aren't sent to servers and don't
         // land in access logs or Referer headers. The SPA reads it and strips it.

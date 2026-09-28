@@ -1,12 +1,12 @@
 import express from "express";
-import { registerUser, loginUser, logoutUser, verifyEmail, verifyTwoStepCode, getLoginHistory, toggleTwoFactorAuth, exportUsers } from "../controllers/authController.js";
+import { registerUser, loginUser, logoutUser, verifyEmail, verifyTwoStepCode, getLoginHistory, toggleTwoFactorAuth, exportUsers, refreshToken } from "../controllers/authController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { authorizeRoles } from "../middleware/roleMiddleware.js";
 import { requireSelfOrAdmin } from "../middleware/ownership.js";
-import { forgotPassword, resetPassword, changePassword} from "../controllers/authController.js";
+import { forgotPassword, resetPassword, changePassword, resendVerificationEmail } from "../controllers/authController.js";
 import { getUsers, getUserById, updateUserDetails, deleteUser } from "../controllers/authController.js";
 import { startGoogleLogin, googleCallback } from "../controllers/oauthController.js";
-import { authLimiter } from "../middleware/rateLimiter.js";
+import { authLimiter, emailLimiter } from "../middleware/rateLimiter.js";
 
 const router = express.Router();
 
@@ -14,10 +14,12 @@ const router = express.Router();
 router.post("/register", registerUser);
 router.post("/login", authLimiter, loginUser);
 router.post("/verify-two-step-code", authLimiter, verifyTwoStepCode);
+router.post("/refresh-token", refreshToken);
 router.post("/logout", logoutUser);
-router.post("/forgot-password", authLimiter, forgotPassword);
+router.post("/forgot-password", emailLimiter, forgotPassword);
 router.post("/reset-password/:token", authLimiter, resetPassword);
 router.get("/verify-email/:token", verifyEmail);
+router.post("/resend-verification", emailLimiter, resendVerificationEmail);
 
 // OIDC federated login - public, because this is how you get a token
 router.get("/google", authLimiter, startGoogleLogin);

@@ -9,7 +9,7 @@ process.env.GOOGLE_CLIENT_ID = "test-client-id";
 process.env.GOOGLE_CLIENT_SECRET = "test-client-secret";
 
 let mongod;
-let User, OidcTransaction, startGoogleLogin, googleCallback;
+let User, OidcTransaction, RefreshToken, startGoogleLogin, googleCallback;
 
 // Stand-in for the provider. Real ID-token validation lives in openid-client;
 // these tests cover OUR logic - state handling, the email_verified gate and
@@ -35,6 +35,7 @@ beforeAll(async () => {
   await mongoose.connect(mongod.getUri());
   ({ User } = await import("../models/user.js"));
   ({ default: OidcTransaction } = await import("../models/oidcTransaction.model.js"));
+  ({ RefreshToken } = await import("../models/refreshToken.js"));
   ({ startGoogleLogin, googleCallback } = await import("../controllers/oauthController.js"));
 }, 120000);
 
@@ -46,13 +47,15 @@ afterAll(async () => {
 beforeEach(async () => {
   await User.deleteMany({});
   await OidcTransaction.deleteMany({});
+  await RefreshToken.deleteMany({});
   oidcMock.claims = null;
   oidcMock.shouldThrow = null;
 });
 
 const mockRes = () => {
-  const res = { redirectedTo: null };
+  const res = { redirectedTo: null, cookies: {} };
   res.redirect = (url) => { res.redirectedTo = url; return res; };
+  res.cookie = (name, value, options) => { res.cookies[name] = { value, options }; return res; };
   return res;
 };
 const errorOf = (res) =>
@@ -254,5 +257,52 @@ describe("password select:false", () => {
       authProviders: [{ provider: "google", providerUserId: "g-1" }]
     });
     expect(user._id).toBeTruthy();
+  });
+});
+
+// V4 made access tokens short-lived (15m) and moved longevity into a hashed
+// refresh token cookie. A federated login must issue one too, or a Google user
+// is logged out in 15 minutes with no way back.
+describe("federated login issues a V4 session", () => {
+  const login = async (claims) => {
+    oidcMock.claims = claims;
+    const start = mockRes();
+    await startGoogleLogin({ query: {} }, start);
+    const state = new URL(start.redirectedTo).searchParams.get("state");
+    const res = mockRes();
+    await googleCallback({ query: { state }, originalUrl: `/cb?code=x&state=${state}` }, res);
+    return res;
+  };
+
+  it("sets an httpOnly refresh cookie", async () => {
+    const res = await login({
+      sub: "g-session", email: "session@example.com", email_verified: true, name: "S"
+    });
+
+    const cookie = res.cookies.refreshToken;
+    expect(cookie).toBeTruthy();
+    expect(cookie.options.httpOnly).toBe(true);
+    expect(cookie.options.sameSite).toBe("strict");
+  });
+
+  it("persists the refresh token hashed, never in plaintext", async () => {
+    const res = await login({
+      sub: "g-hash", email: "hash@example.com", email_verified: true, name: "H"
+    });
+
+    const raw = res.cookies.refreshToken.value;
+    const stored = await RefreshToken.findOne({});
+    expect(stored).toBeTruthy();
+    expect(stored.tokenHash).not.toBe(raw);
+    expect(stored.expiresAt.getTime()).toBeGreaterThan(Date.now());
+
+    const user = await User.findOne({ email: "hash@example.com" });
+    expect(stored.user.toString()).toBe(user._id.toString());
+  });
+
+  it("issues no refresh token when the login is refused", async () => {
+    await User.create({ name: "V", email: "v@example.com", phone: "0771234567", password: "h" });
+    await login({ sub: "atk", email: "v@example.com", email_verified: false, name: "A" });
+    expect(await RefreshToken.countDocuments()).toBe(0);
   });
 });

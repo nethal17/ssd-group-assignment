@@ -1,6 +1,5 @@
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
-import { blacklistedTokens } from "../controllers/authController.js";
 import { User } from "../models/user.js";
 
 export const authMiddleware = async (req, res, next) => {
@@ -21,11 +20,6 @@ export const authMiddleware = async (req, res, next) => {
         return res.status(401).json({ msg: "No token, authorization denied" });
     }
 
-    // Check if token is blacklisted
-    if (blacklistedTokens.has(token)) {
-        return res.status(401).json({ msg: "Token has been blacklisted. Please log in again." });
-    }
-
     // Verify token and re-hydrate user
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET, {
@@ -39,10 +33,17 @@ export const authMiddleware = async (req, res, next) => {
             return res.status(401).json({ msg: "Token invalid: invalid subject identifier" });
         }
 
-        // Re-hydrate user from DB so role updates and deactivations take effect immediately
-        const user = await User.findById(userId).select("role email isVerified name");
+        // Re-hydrate user from DB so role updates, deactivations, and token revocations take effect immediately
+        const user = await User.findById(userId).select("role email isVerified name tokenVersion");
         if (!user) {
             return res.status(401).json({ msg: "User no longer exists or authorization revoked" });
+        }
+
+        // Token revocation check: tokenVersion is bumped on password reset/change (and global logout),
+        // which rejects every access token issued before the bump. A token without the claim counts
+        // as version 0, so it cannot skip the check once the user's version has moved on.
+        if ((decoded.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) {
+            return res.status(401).json({ msg: "Session has been invalidated. Please log in again." });
         }
 
         // Consistent contract for req.user across all controllers and middlewares
@@ -54,7 +55,8 @@ export const authMiddleware = async (req, res, next) => {
             role: user.role,
             email: user.email,
             name: user.name,
-            isVerified: user.isVerified
+            isVerified: user.isVerified,
+            tokenVersion: user.tokenVersion
         };
 
         next();

@@ -1,11 +1,37 @@
 import { User } from "../models/user.js";
+import { RefreshToken } from "../models/refreshToken.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import nodemailer from "nodemailer";
-import { signAccessToken } from "../utils/token.js";
+import { 
+    signAccessToken, 
+    generateRefreshToken, 
+    hashRefreshToken, 
+    setRefreshTokenCookie, 
+    clearRefreshTokenCookie 
+} from "../utils/token.js";
+import { USER_SAFE_FIELDS, toUserDTO, toAdminUserSummary } from "../utils/userSerializer.js";
+import {
+    generateToken,
+    hashToken,
+    isWellFormedToken,
+    RESET_TOKEN_TTL_MS,
+    VERIFICATION_TOKEN_TTL_MS,
+} from "../utils/authTokens.js";
 
-export const blacklistedTokens = new Set();
+// Public base URLs used in emailed links and redirects
+const FRONTEND_URL = process.env.FRONTEND_URL;
+const BACKEND_URL = process.env.BACKEND_URL;
+
+// Same response whether or not the account exists, so these endpoints can't be used to enumerate emails
+const RESET_REQUESTED_MSG = "If an account exists for that email, a password reset link has been sent.";
+const VERIFICATION_RESENT_MSG = "If an unverified account exists for that email, a new verification link has been sent.";
+
+// 2FA state is select:false on the model; verifyTwoStepCode must opt in to read it
+const TWO_FACTOR_FIELDS =
+    "+twoStepVerificationCode +twoStepVerificationExpire +twoStepVerificationAttempts +mfaTicket +mfaTicketExpire";
 
 export const generateVerificationCode = () => {
     // Cryptographically secure 6-digit random code (100000 - 999999)
@@ -76,23 +102,111 @@ export const sendVerificationCode = async (email, code) => {
     await transporter.sendMail(mailOptions);
 };
 
+// Emails the raw verification token; only its hash is stored on the user.
+const sendVerificationEmail = async (user, rawToken) => {
+    const transporter = nodemailer.createTransport({
+        service: "Gmail",
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+        }
+    });
+
+    const verificationURL = `${BACKEND_URL}/api/auth/verify-email/${rawToken}`;
+    const mailOptions = {
+        to: user.email,
+        from: process.env.EMAIL_USER,
+        subject: "Welcome to Agri-Waste Marketplace - Verify Your Email",
+        html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #2c3e50; margin-bottom: 10px;">Welcome to Agri-Waste Marketplace!</h1>
+                    <p style="color: #7f8c8d; font-size: 16px;">Thank you for registering with us. We're excited to have you on board!</p>
+                </div>
+
+                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 30px;">
+                    <p style="color: #34495e; margin-bottom: 20px;">To complete your registration and start using our platform, please verify your email address by clicking the button below:</p>
+
+                    <div style="text-align: center;">
+                        <a href="${verificationURL}" style="display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 20px 0;">Verify Email Address</a>
+                    </div>
+
+                    <p style="color: #7f8c8d; font-size: 14px; margin-top: 20px;">If the button above doesn't work, you can also copy and paste the following link into your browser:</p>
+                    <p style="word-break: break-all; color: #3498db; font-size: 14px;">${verificationURL}</p>
+                </div>
+
+                <div style="text-align: center; color: #7f8c8d; font-size: 14px;">
+                    <p>This verification link will expire in 24 hours.</p>
+                    <p>If you didn't create an account with us, please ignore this email.</p>
+                </div>
+
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
+                    <p style="color: #7f8c8d; font-size: 12px;">© 2024 Agri-Waste Marketplace. All rights reserved.</p>
+                </div>
+            </div>
+        `
+    };
+
+    await transporter.sendMail(mailOptions);
+};
+
 export const verifyEmail = async (req, res) => {
     const { token } = req.params;
+    const failedURL = `${FRONTEND_URL}/resend-verification?status=invalid`;
+
+    if (!isWellFormedToken(token)) {
+        return res.redirect(failedURL);
+    }
 
     try {
-        const user = await User.findOne({ verificationToken: token });
+        // Look up by hash and consume in one atomic update, so a link works exactly once
+        const user = await User.findOneAndUpdate(
+            {
+                verificationToken: hashToken(token),
+                verificationTokenExpire: { $gt: Date.now() }
+            },
+            {
+                $set: { isVerified: true },
+                $unset: { verificationToken: "", verificationTokenExpire: "" }
+            }
+        );
 
         if (!user) {
-            return res.status(400).json({ msg: "Invalid or expired token" });
+            return res.redirect(failedURL);
         }
 
-        user.isVerified = true;
-        user.verificationToken = undefined;
-        await user.save();
+        res.redirect(`${FRONTEND_URL}/email-verification-success`);
 
-        // Redirect to the success page
-        res.redirect('http://localhost:5173/email-verification-success');
-        
+    } catch (err) {
+        console.log(err);
+        res.redirect(failedURL);
+    }
+};
+
+export const resendVerificationEmail = async (req, res) => {
+    const { email } = req.body;
+
+    if (typeof email !== "string" || !email.trim()) {
+        return res.status(400).json({ msg: "Please provide your email address." });
+    }
+
+    try {
+        const user = await User.findOne({ email: email.trim(), isVerified: false });
+
+        if (user) {
+            // Issuing a new token replaces the old hash, so any earlier link stops working
+            const verification = generateToken();
+            user.verificationToken = verification.hash;
+            user.verificationTokenExpire = Date.now() + VERIFICATION_TOKEN_TTL_MS;
+            await user.save();
+
+            // Not awaited: response time must not reveal whether the account exists
+            sendVerificationEmail(user, verification.raw)
+                .catch((err) => console.error("Failed to send verification email:", err));
+        }
+
+        res.json({ msg: VERIFICATION_RESENT_MSG });
+
     } catch (err) {
         console.log(err);
         res.status(500).json({ msg: "Server Error" });
@@ -133,7 +247,8 @@ export const registerUser = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        const verificationToken = crypto.randomBytes(32).toString("hex");
+        // Only the hash is persisted; the raw token goes out in the email link
+        const verification = generateToken();
 
         user = new User({
             name,
@@ -141,55 +256,13 @@ export const registerUser = async (req, res) => {
             phone,
             password: hashedPassword,
             role,
-            verificationToken
+            verificationToken: verification.hash,
+            verificationTokenExpire: Date.now() + VERIFICATION_TOKEN_TTL_MS
         });
 
         await user.save();
 
-        const transporter = nodemailer.createTransport({
-            service: "Gmail",
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS
-            }
-        });
-
-        const verificationURL = `http://localhost:3000/api/auth/verify-email/${verificationToken}`;
-        const mailOptions = {
-            to: user.email,
-            from: process.env.EMAIL_USER,
-            subject: "Welcome to Agri-Waste Marketplace - Verify Your Email",
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-                    <div style="text-align: center; margin-bottom: 30px;">
-                        <h1 style="color: #2c3e50; margin-bottom: 10px;">Welcome to Agri-Waste Marketplace!</h1>
-                        <p style="color: #7f8c8d; font-size: 16px;">Thank you for registering with us. We're excited to have you on board!</p>
-                    </div>
-                    
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 30px;">
-                        <p style="color: #34495e; margin-bottom: 20px;">To complete your registration and start using our platform, please verify your email address by clicking the button below:</p>
-                        
-                        <div style="text-align: center;">
-                            <a href="${verificationURL}" style="display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 20px 0;">Verify Email Address</a>
-                        </div>
-                        
-                        <p style="color: #7f8c8d; font-size: 14px; margin-top: 20px;">If the button above doesn't work, you can also copy and paste the following link into your browser:</p>
-                        <p style="word-break: break-all; color: #3498db; font-size: 14px;">${verificationURL}</p>
-                    </div>
-                    
-                    <div style="text-align: center; color: #7f8c8d; font-size: 14px;">
-                        <p>This verification link will expire in 24 hours.</p>
-                        <p>If you didn't create an account with us, please ignore this email.</p>
-                    </div>
-                    
-                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
-                        <p style="color: #7f8c8d; font-size: 12px;">© 2024 Agri-Waste Marketplace. All rights reserved.</p>
-                    </div>
-                </div>
-            `
-        };
-
-        await transporter.sendMail(mailOptions);
+        await sendVerificationEmail(user, verification.raw);
 
         res.status(201).json({
             msg: "User registered successfully. Please check your email to verify your account."
@@ -205,6 +278,7 @@ export const loginUser = async (req, res) => {
     const { email, password } = req.body;
 
     try {
+        // password is select:false - opt in only where it is compared
         const user = await User.findOne({ email }).select("+password");
         if (!user) {
             return res.status(400).json({ msg: "Invalid credentials" });
@@ -282,6 +356,16 @@ export const loginUser = async (req, res) => {
 
         const token = signAccessToken(user);
         
+        // Persist hashed refresh token with 7-day TTL and issue secure httpOnly cookie
+        const rawRefreshToken = generateRefreshToken();
+        const tokenHash = hashRefreshToken(rawRefreshToken);
+        await RefreshToken.create({
+            user: user._id,
+            tokenHash,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        });
+        setRefreshTokenCookie(res, rawRefreshToken);
+
         // Send complete user data in response
         res.json({ 
             token, 
@@ -303,121 +387,176 @@ export const loginUser = async (req, res) => {
     }
 };
 
-export const logoutUser = (req, res) => {
-    const token = req.headers.authorization?.split(" ")[1];
+export const logoutUser = async (req, res) => {
+    try {
+        const incomingToken = req.cookies?.refreshToken || req.body?.refreshToken;
+        if (incomingToken) {
+            const incomingHash = hashRefreshToken(incomingToken);
+            await RefreshToken.findOneAndUpdate({ tokenHash: incomingHash }, { revoked: true });
+        }
 
-    if (!token) {
-        console.log("Logout failed: No token provided");
-        return res.status(400).json({ message: "No token provided" });
+        clearRefreshTokenCookie(res);
+        return res.status(200).json({ message: "Logged out successfully" });
+    } catch (err) {
+        console.error("Logout error:", err);
+        return res.status(500).json({ message: "An internal server error occurred" });
     }
+};
 
-    if (blacklistedTokens.has(token)) {
-        return res.status(401).json({ msg: "You are already logged out. Please log in." });
+/**
+ * Exchange a valid refresh token cookie for a new short-lived access token
+ * with Refresh Token Rotation (RTR).
+ */
+export const refreshToken = async (req, res) => {
+    const incomingToken = req.cookies?.refreshToken || req.body?.refreshToken;
+
+    if (!incomingToken) {
+        return res.status(401).json({ msg: "No refresh token provided" });
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const incomingHash = hashRefreshToken(incomingToken);
+        const tokenRecord = await RefreshToken.findOne({ tokenHash: incomingHash });
 
-        blacklistedTokens.add(token);
-        console.log("Token blacklisted:", token);
+        if (!tokenRecord) {
+            return res.status(401).json({ msg: "Invalid refresh token" });
+        }
 
-        res.clearCookie("refreshToken", {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
+        if (tokenRecord.revoked) {
+            // Token reuse detected - invalidate all sessions for this user as a safeguard
+            await RefreshToken.updateMany({ user: tokenRecord.user }, { revoked: true });
+            clearRefreshTokenCookie(res);
+            return res.status(401).json({ msg: "Refresh token has been revoked" });
+        }
+
+        if (new Date(tokenRecord.expiresAt) <= new Date()) {
+            clearRefreshTokenCookie(res);
+            return res.status(401).json({ msg: "Refresh token has expired. Please log in again." });
+        }
+
+        const user = await User.findById(tokenRecord.user);
+        if (!user) {
+            clearRefreshTokenCookie(res);
+            return res.status(401).json({ msg: "User no longer exists" });
+        }
+
+        // Refresh Token Rotation: revoke used token, record successor, and issue fresh token
+        const newRawRefreshToken = generateRefreshToken();
+        const newHash = hashRefreshToken(newRawRefreshToken);
+
+        tokenRecord.revoked = true;
+        tokenRecord.replacedByTokenHash = newHash;
+        await tokenRecord.save();
+
+        await RefreshToken.create({
+            user: user._id,
+            tokenHash: newHash,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         });
 
-        res.status(200).json({ message: "Logged out successfully" });
+        setRefreshTokenCookie(res, newRawRefreshToken);
+        const newAccessToken = signAccessToken(user);
+
+        return res.json({
+            token: newAccessToken,
+            user: toUserDTO(user)
+        });
     } catch (err) {
-        console.error("Logout error:", err);
-
-        if (err.name === "JsonWebTokenError") {
-            return res.status(401).json({ msg: "Invalid token" });
-        }
-
-        if (err.name === "TokenExpiredError") {
-            return res.status(401).json({ msg: "Token has expired" });
-        }
-
-        res.status(500).json({ msg: "Server Error" });
+        console.error("Error refreshing token:", err);
+        return res.status(500).json({ msg: "Server Error" });
     }
+};
+
+// Emails the raw reset token; only its hash is stored on the user.
+const sendPasswordResetEmail = async (user, rawToken) => {
+    const transporter = nodemailer.createTransport({
+        service: "Gmail",
+        auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+    });
+
+    const resetURL = `${FRONTEND_URL}/reset-password/${rawToken}`;
+    const mailOptions = {
+        to: user.email,
+        from: process.env.EMAIL_USER,
+        subject: "Password Reset Request - Agri-Waste Marketplace",
+        html: `
+            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <tr>
+                    <td style="padding: 20px; text-align: center;">
+                        <h1 style="color: #2c3e50; margin-bottom: 10px;">Password Reset Request</h1>
+                        <p style="color: #7f8c8d; font-size: 16px;">We received a request to reset your password</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="background-color: #f8f9fa; padding: 20px;">
+                        <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                            <tr>
+                                <td style="padding: 20px; text-align: center;">
+                                    <p style="color: #34495e; margin-bottom: 20px;">Hello ${user.name},</p>
+                                    <p style="color: #34495e; margin-bottom: 20px;">We received a request to reset your password for your Agri-Waste Marketplace account. If you didn't make this request, you can safely ignore this email.</p>
+
+                                    <table style="margin: 30px auto;">
+                                        <tr>
+                                            <td>
+                                                <a href="${resetURL}" style="display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Reset Password</a>
+                                            </td>
+                                        </tr>
+                                    </table>
+
+                                    <p style="color: #34495e; margin: 20px 0;">This password reset link will expire in 30 minutes.</p>
+
+                                    <table style="background-color: #fff3cd; color: #856404; padding: 15px; margin: 20px 0; text-align: left; width: 100%;">
+                                        <tr>
+                                            <td>
+                                                <p style="margin: 0;"><strong>Important:</strong> For security reasons, please do not share this link with anyone. Our team will never ask for your password or reset link.</p>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="text-align: center; color: #7f8c8d; font-size: 14px; padding: 20px;">
+                        <p>This is an automated message. Please do not reply to this email.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
+                        <p style="color: #7f8c8d; font-size: 12px;">© 2024 Agri-Waste Marketplace. All rights reserved.</p>
+                    </td>
+                </tr>
+            </table>
+        `
+    };
+
+    await transporter.sendMail(mailOptions);
 };
 
 export const forgotPassword = async (req, res) => {
     const { email } = req.body;
 
+    if (typeof email !== "string" || !email.trim()) {
+        return res.status(400).json({ msg: "Please provide your email address." });
+    }
+
     try {
-        const user = await User.findOne({ email });
-        if (!user) return res.status(404).json({ msg: "User not found" });
+        const user = await User.findOne({ email: email.trim() });
 
-        const resetToken = crypto.randomBytes(32).toString("hex");
-        user.resetPasswordToken = resetToken;
-        user.resetPasswordExpire = Date.now() + 7200000; // 1 hour expiration
-        await user.save();
+        if (user) {
+            // A new request replaces the previous hash, so only the latest link is valid
+            const reset = generateToken();
+            user.resetPasswordToken = reset.hash;
+            user.resetPasswordExpire = Date.now() + RESET_TOKEN_TTL_MS;
+            await user.save();
 
-        const transporter = nodemailer.createTransport({
-            service: "Gmail",
-            auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-        });
+            // Not awaited: response time must not reveal whether the account exists
+            sendPasswordResetEmail(user, reset.raw)
+                .catch((err) => console.error("Failed to send password reset email:", err));
+        }
 
-        const resetURL = `http://localhost:5173/reset-password/${resetToken}`;
-        const mailOptions = {
-            to: user.email,
-            from: process.env.EMAIL_USER,
-            subject: "Password Reset Request - Agri-Waste Marketplace",
-            html: `
-                <table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <tr>
-                        <td style="padding: 20px; text-align: center;">
-                            <h1 style="color: #2c3e50; margin-bottom: 10px;">Password Reset Request</h1>
-                            <p style="color: #7f8c8d; font-size: 16px;">We received a request to reset your password</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="background-color: #f8f9fa; padding: 20px;">
-                            <table width="100%" border="0" cellspacing="0" cellpadding="0">
-                                <tr>
-                                    <td style="padding: 20px; text-align: center;">
-                                        <p style="color: #34495e; margin-bottom: 20px;">Hello ${user.name},</p>
-                                        <p style="color: #34495e; margin-bottom: 20px;">We received a request to reset your password for your Agri-Waste Marketplace account. If you didn't make this request, you can safely ignore this email.</p>
-                                        
-                                        <table style="margin: 30px auto;">
-                                            <tr>
-                                                <td>
-                                                    <a href="${resetURL}" style="display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Reset Password</a>
-                                                </td>
-                                            </tr>
-                                        </table>
-                                        
-                                        <p style="color: #34495e; margin: 20px 0;">This password reset link will expire in 1 hour.</p>
-                                        
-                                        <table style="background-color: #fff3cd; color: #856404; padding: 15px; margin: 20px 0; text-align: left; width: 100%;">
-                                            <tr>
-                                                <td>
-                                                    <p style="margin: 0;"><strong>Important:</strong> For security reasons, please do not share this link with anyone. Our team will never ask for your password or reset link.</p>
-                                                </td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="text-align: center; color: #7f8c8d; font-size: 14px; padding: 20px;">
-                            <p>This is an automated message. Please do not reply to this email.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center;">
-                            <p style="color: #7f8c8d; font-size: 12px;">© 2024 Agri-Waste Marketplace. All rights reserved.</p>
-                        </td>
-                    </tr>
-                </table>
-            `
-        };
-
-        await transporter.sendMail(mailOptions);
-        res.json({ msg: "Reset link sent to email" });
+        res.json({ msg: RESET_REQUESTED_MSG });
 
     } catch (err) {
         console.log(err);
@@ -429,22 +568,40 @@ export const resetPassword = async (req, res) => {
     const { token } = req.params;
     const { password } = req.body;
 
+    if (typeof password !== "string" || password.length < 8) {
+        return res.status(400).json({ msg: "Password must be at least 8 characters long." });
+    }
+
+    if (!isWellFormedToken(token)) {
+        return res.status(400).json({ msg: "This reset link is invalid or has expired." });
+    }
+
     try {
-        const user = await User.findOne({
-            resetPasswordToken: token,
-            resetPasswordExpire: { $gt: Date.now() } 
-        });
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+        const now = new Date();
+
+        // Look up by hash and consume in one atomic update, so a link works exactly once.
+        // Bumping tokenVersion revokes every access token issued before the reset.
+        const user = await User.findOneAndUpdate(
+            {
+                resetPasswordToken: hashToken(token),
+                resetPasswordExpire: { $gt: Date.now() }
+            },
+            {
+                $set: { password: hashedPassword, lastSecurityUpdate: now },
+                $unset: { resetPasswordToken: "", resetPasswordExpire: "" },
+                $inc: { tokenVersion: 1 }
+            }
+        );
 
         if (!user) {
-            return res.status(400).json({ msg: "Invalid or expired token" });
+            return res.status(400).json({ msg: "This reset link is invalid or has expired." });
         }
 
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(password, salt);
-        
-        user.resetPasswordToken = undefined;
-        user.resetPasswordExpire = undefined;
-        await user.save();
+        // Invalidate all active refresh tokens across all devices
+        await RefreshToken.updateMany({ user: user._id }, { revoked: true });
+        clearRefreshTokenCookie(res);
 
         res.json({ msg: "Password successfully reset" });
 
@@ -469,12 +626,13 @@ export const verifyTwoStepCode = async (req, res) => {
             user = await User.findOne({
                 mfaTicket: hashedTicket,
                 mfaTicketExpire: { $gt: Date.now() }
-            });
+            }).select(TWO_FACTOR_FIELDS);
         }
 
         // Fallback to email or userId if ticket was not provided
         if (!user && (email || userId)) {
-            user = email ? await User.findOne({ email }) : await User.findById(userId);
+            const query = email ? User.findOne({ email }) : User.findById(userId);
+            user = await query.select(TWO_FACTOR_FIELDS);
         }
 
         // Generic error response to prevent account enumeration
@@ -545,6 +703,16 @@ export const verifyTwoStepCode = async (req, res) => {
 
         const token = signAccessToken(user);
 
+        // Persist hashed refresh token with 7-day TTL and issue secure httpOnly cookie
+        const rawRefreshToken = generateRefreshToken();
+        const tokenHash = hashRefreshToken(rawRefreshToken);
+        await RefreshToken.create({
+            user: user._id,
+            tokenHash,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        });
+        setRefreshTokenCookie(res, rawRefreshToken);
+
         return res.json({ 
             token, 
             user: { 
@@ -569,8 +737,13 @@ export const verifyTwoStepCode = async (req, res) => {
 
 export const getUsers = async (req, res) => {
     try {
-        const users = await User.find({});
-        res.status(200).json({ count: users.length, data: users });
+        // Project at the DB: only safe fields plus what lastLogin needs (no IPs)
+        const users = await User.find({})
+            .select(`${USER_SAFE_FIELDS} loginHistory.timestamp loginHistory.deviceInfo loginHistory.status`)
+            .lean();
+
+        const data = users.map(toAdminUserSummary);
+        res.status(200).json({ count: data.length, data });
 
     } catch (err) {
         console.log(err);
@@ -581,9 +754,17 @@ export const getUsers = async (req, res) => {
 export const getUserById = async (req, res) => {
     const { id } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: "Invalid user id" });
+    }
+
     try {
-        const user = await User.findById(id);
-        res.status(200).json(user);
+        const user = await User.findById(id).select(USER_SAFE_FIELDS).lean();
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        res.status(200).json(toUserDTO(user));
 
     } catch (err) {
         console.log(err);
@@ -595,20 +776,36 @@ export const updateUserDetails = async (req, res) => {
     const { id } = req.params;
 
     try {
-        const { name, email, phone } = req.body;
-        if (!name || !email || !phone) {
-            return res.status(400).json({ message: "Name, email, and phone are required" });
+        // email is not updatable here - unverified changes = account takeover
+        const { name, phone } = req.body;
+
+        if (!name || !phone) {
+            return res.status(400).json({ message: "Name and phone are required" });
         }
 
-        let updatedData = { name, email, phone };
+        if (typeof name !== "string" || !name.trim()) {
+            return res.status(400).json({ message: "Name must be a non-empty string" });
+        }
 
-        const result = await User.findByIdAndUpdate(id, updatedData, { new: true });
+        if (!/^0\d{9}$/.test(phone)) {
+            return res.status(400).json({ message: "Phone must be 10 digits starting with 0" });
+        }
+
+        // V8 keeps email out of the update; V11's allow-list projection decides
+        // what comes back. updatedData is gone - only name and phone are writable.
+        const result = await User.findByIdAndUpdate(
+            id,
+            { name: name.trim(), phone },
+            { new: true, runValidators: true }
+        )
+            .select(USER_SAFE_FIELDS)
+            .lean();
 
         if (!result) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        res.status(200).json({ message: "User updated successfully", user: result });
+        res.status(200).json({ message: "User updated successfully", user: toUserDTO(result) });
 
     } catch (err) {
         console.error("Error updating user:", err);
@@ -635,11 +832,11 @@ export const updateSecurityTimestamp = async (req, res) => {
 };
 
 export const changePassword = async (req, res) => {
-    const { id } = req.params;
+    const { userId } = req.params;
     const { currentPassword, newPassword, confirmNewPassword } = req.body;
 
     try {
-        const user = await User.findById(id).select("+password");
+        const user = await User.findById(userId).select("+password");
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
@@ -658,7 +855,12 @@ export const changePassword = async (req, res) => {
 
         user.password = hashedPassword;
         user.lastSecurityUpdate = new Date();
+        user.tokenVersion = (user.tokenVersion || 0) + 1;
         await user.save();
+
+        // Invalidate all active refresh tokens across all devices
+        await RefreshToken.updateMany({ user: user._id }, { revoked: true });
+        clearRefreshTokenCookie(res);
 
         res.status(200).json({ message: "Password changed successfully" });
     } catch (err) {
@@ -716,7 +918,7 @@ export const deleteUser = async (req, res) => {
                             <p style="color: #34495e;">If you wish to continue using our services, you can register a new account by clicking the button below:</p>
                             
                             <div style="text-align: center; margin: 30px 0;">
-                                <a href="http://localhost:5173/register" style="display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Register with Us</a>
+                                <a href="${FRONTEND_URL}/register" style="display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Register with Us</a>
                             </div>
                             
                             <p style="color: #34495e;">We look forward to having you back in our community!</p>
@@ -770,7 +972,7 @@ export const deleteUser = async (req, res) => {
                         <p style="color: #34495e;">If you wish to reactivate your account, please login to your account using the button below:</p>
                         
                         <div style="text-align: center; margin: 30px 0;">
-                            <a href="http://localhost:5173/login" style="display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Login into your Account</a>
+                            <a href="${FRONTEND_URL}/login" style="display: inline-block; background-color: #27ae60; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Login into your Account</a>
                         </div>
                         
                         <p style="color: #34495e;">We look forward to having you back in our community!</p>
