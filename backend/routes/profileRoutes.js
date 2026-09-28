@@ -6,6 +6,8 @@ import dotenv from "dotenv";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { requireSelfOrAdmin } from "../middleware/ownership.js";
 import { fileTypeFromBuffer } from "file-type";
+import { validate } from "../validation/validate.js";
+import { photoUploadParams } from "../validation/schemas/auth.schemas.js";
 
 dotenv.config();
 
@@ -45,7 +47,7 @@ const uploadSingle = (req, res, next) => {
 };
 
 // Upload profile picture (Protected by authMiddleware and requireSelfOrAdmin)
-photoRouter.post("/upload-profile-pic/:userId", authMiddleware, requireSelfOrAdmin("userId"), uploadSingle, async (req, res) => {
+photoRouter.post("/upload-profile-pic/:userId", authMiddleware, validate({ params: photoUploadParams }), requireSelfOrAdmin("userId"), uploadSingle, async (req, res) => {
     try {
       const { userId } = req.params;
       const file = req.file;

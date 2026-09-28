@@ -241,7 +241,7 @@ export const OrderHistoryPage = ({ checkoutData }) => {
         orderDate: order.orderDate,
         //refundDate: new Date().toISOString(),
         refundReason: "Order cancelled by user",
-        refundStatus: "pending"
+        // refundStatus is set by the server (always "pending" for a new refund)
       };
 
       console.log('Sending refund data:', refundData); // Debug log
@@ -265,12 +265,9 @@ export const OrderHistoryPage = ({ checkoutData }) => {
 
   const handleReviewSubmit = async (reviewData) => {
     try {
+      // The server takes the buyer from the login and the farmer/product from the order
       await apiService.post("/api/reviews/add", {
-        
-        buyerId: userId,
         orderId: reviewData.orderId,
-        farmerId: reviewData.farmerId,
-        productName: reviewData.productName,
         rating: reviewData.rating,
         review: reviewData.review
       });

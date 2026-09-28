@@ -106,7 +106,7 @@ export const updateDeliveryStatus = async (req, res) => {
         const updatedDelivery = await Delivery.findByIdAndUpdate(
             deliveryId,
             { deliveryStatus },
-            { new: true }
+            { new: true, runValidators: true }
         ).populate('userId', 'name email').populate('productId', 'productName');
 
         if (!updatedDelivery) {

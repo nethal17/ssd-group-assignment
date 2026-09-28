@@ -30,8 +30,9 @@ export const ResetPassword = () => {
       return;
     }
 
-    if (password.length < 8) {
-      toast.error("Password must be at least 8 characters long.");
+    // Same policy the server enforces (and the sign-up form uses)
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,128}$/.test(password)) {
+      toast.error("Password must be at least 8 characters and include uppercase, lowercase, number and special character.");
       setLoading(false);
       return;
     }

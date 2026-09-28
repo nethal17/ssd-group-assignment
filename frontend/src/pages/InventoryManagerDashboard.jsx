@@ -137,10 +137,9 @@ export const InventoryManagerDashboard = () => {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        data: { 
+data: {
+          // The server emails the farmer on file; the client does not choose the recipient
           reason: deleteReason,
-          farmerEmail: farmerEmail,
-          productName: listingToDelete.wasteItem
         },
       });
 

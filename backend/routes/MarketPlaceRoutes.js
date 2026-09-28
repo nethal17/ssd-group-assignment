@@ -9,12 +9,14 @@ import {
   getWasteDetailsByCategory,
   getWasteDetailsByType
 } from '../controllers/MarketPlaceController.js';
+import { validate } from "../validation/validate.js";
+import { listingIdParams } from "../validation/schemas/listing.schemas.js";
 
 const router = express.Router();
 
 router.get('/farmer-listings/:farmerId', getFarmerListings);
 router.get('/listings-details/:listingId', getListingDetails);
-router.delete('/listings-delete/:listingId', deleteListing);
+router.delete('/listings-delete/:listingId', validate({ params: listingIdParams }), deleteListing);
 router.get('/product/:productId', getProductById);
 router.get('/listings', getAllListings);
 router.get('/waste/:category', getWasteByCategory);

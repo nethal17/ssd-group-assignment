@@ -9,10 +9,10 @@ const DriverForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // A new driver always starts with no deliveries; the count is maintained server-side
       await apiService.post('/api/drivers', { 
         name, 
         age,
-        deliveryCount 
       });
       alert('Driver created successfully!');
       setName('');

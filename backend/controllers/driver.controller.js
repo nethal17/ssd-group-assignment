@@ -26,7 +26,7 @@ export const updateDriverSalary = async (req, res) => {
   try {
     const { id } = req.params;
     const { totalSalary } = req.body;
-    const driver = await Driver.findByIdAndUpdate(id, { totalSalary }, { new: true });
+    const driver = await Driver.findByIdAndUpdate(id, { totalSalary }, { new: true, runValidators: true });
     res.status(200).json(driver);
   } catch (error) {
     res.status(500).json({ message: "An internal server error occurred" });
@@ -66,7 +66,7 @@ export const updateDriverDeliveryCount = async (req, res) => {
     const driver = await Driver.findByIdAndUpdate(
       id, 
       { deliveryCount }, 
-      { new: true }
+      { new: true, runValidators: true }
     );
     
     res.status(200).json(driver);

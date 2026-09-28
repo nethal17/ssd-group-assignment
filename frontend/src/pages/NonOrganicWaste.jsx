@@ -139,13 +139,8 @@ const CategoryProducts = () => {
       const cartItem = {
         userId,
         wasteId: product._id,
-        farmerId: product.farmerId._id, // Add the farmerId property
-        description: product.wasteItem,
-        price: product.price,
         quantity: product.quantity,
-        deliveryCost: 1000, // You can modify this based on your requirements
-        productImage: product.image || "", // Add the image URL to the cart item
-      }
+      } // price, delivery cost, farmer and image are set by the server from the listing
 
       const response = await apiService.post("/api/cart/add", cartItem)
 

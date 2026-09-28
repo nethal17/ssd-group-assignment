@@ -60,13 +60,14 @@ const FarmerList = () => {
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
-      await apiService.put(`/api/auth/updateUser/${editingFarmer._id}`, values);
+      // Email is not editable here (account-recovery channel); only name and phone are sent
+      await apiService.put(`/api/auth/updateUser/${editingFarmer._id}`, { name: values.name, phone: values.phone });
       message.success('Farmer updated successfully');
       setIsModalVisible(false);
       fetchFarmers();
     } catch (error) {
       console.error('Error updating farmer:', error);
-      message.error('Failed to update farmer');
+      message.error(error.response?.data?.message || 'Failed to update farmer');
     }
   };
 
@@ -185,7 +186,7 @@ const FarmerList = () => {
                 { type: 'email', message: 'Please enter a valid email!' }
               ]}
             >
-              <input />
+              <input disabled title="Email cannot be changed here" />
             </Form.Item>
             <Form.Item
               name="phone"

@@ -113,7 +113,11 @@ export const updateFarmerDetailsById = async (req, res) => {
   try {
 
       const { id } = req.params;
-      const updatedData = req.body;
+      // Only the fields the farmer-details form edits (see updateFarmerDetailsBody)
+      const { farmerId, farmerPhone, district } = req.body;
+      const updatedData = Object.fromEntries(
+        Object.entries({ farmerId, farmerPhone, district }).filter(([, value]) => value !== undefined)
+      );
 
       const updatedFarmer = await DeliveryRequest.findByIdAndUpdate(id, updatedData, {
         new: true, 

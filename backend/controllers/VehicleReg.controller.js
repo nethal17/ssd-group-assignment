@@ -1,4 +1,3 @@
-import { User } from "../models/user.js";
 import { VehicleReg as VehicleRegModel } from "../models/VehicleReg.model.js";  // <-- Renamed model
 import bcrypt from "bcryptjs";
 
@@ -6,12 +5,14 @@ export const registerVehicle = async (req, res) => {  // <-- Renamed function
   try {
     const {
       nic, licenseNumber, licenseExpiry, address,
-      preferredDistrict, vehicleType, vehicleNumber, email
+      preferredDistrict, vehicleType, vehicleNumber
     } = req.body;
 
-    // 1. Check existing user
-    const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ msg: "Vehicle already exists" });
+    // 1. Reject a duplicate registration of the same vehicle. (This used to look up
+    //    a User by an email the form never sends; findOne({ email: undefined })
+    //    matched any user, so every registration was refused.)
+    const existingVehicle = await VehicleRegModel.findOne({ vehicleNumber });
+    if (existingVehicle) return res.status(400).json({ msg: "Vehicle already exists" });
 
     // 2. Create truck driver profile
     const newVehicle = await VehicleRegModel.create({
@@ -54,7 +55,13 @@ export const deleteVehicle = async (req, res) => {
 export const updateVehicleDetails = async (req, res) => {
   try {
     const { id } = req.params; // Extract vehicle ID from request parameters
-    const updateData = req.body; // Extract updated data from request body
+    // Only the editable, validated vehicle fields (see updateVehicleBody)
+    const { nic, licenseNumber, licenseExpiry, address, preferredDistrict, vehicleType, vehicleNumber } = req.body;
+    const updateData = Object.fromEntries(
+      Object.entries({ nic, licenseNumber, licenseExpiry, address, preferredDistrict, vehicleType, vehicleNumber })
+        .filter(([, value]) => value !== undefined)
+    );
+    updateData.updatedAt = new Date();
 
     // Find the vehicle by ID and update its details
     const updatedVehicle = await VehicleRegModel.findByIdAndUpdate(id, updateData, {

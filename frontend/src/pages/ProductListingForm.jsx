@@ -218,7 +218,8 @@ export const ProductListingForm = () => {
         throw new Error(responseData.message || responseData.error?.message || "Submission failed");
       }
 
-      if (response.ok) {
+      // axios responses have no .ok (that is the fetch API); a 2xx status means success
+      if (response.status >= 200 && response.status < 300) {
         toast.success("Product listed successfully! Your Listings will be reviewed shortly.");
         // Reset form after successful submission
         setFormData({

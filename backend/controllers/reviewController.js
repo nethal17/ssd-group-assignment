@@ -3,18 +3,15 @@ import OrderHistory from '../models/orderHistory.model.js';
 import { User } from '../models/user.js';
 import mongoose from 'mongoose';
 import nodemailer from "nodemailer";
+import { escapeHtml } from '../utils/escapeHtml.js';
 
 
 // Add a review (Buyer)
 export const addReview = async (req, res) => {
   try {
-    const { buyerId, orderId, farmerId, productName, rating, review } = req.body;
-
-    if (!mongoose.Types.ObjectId.isValid(buyerId) ||
-        !mongoose.Types.ObjectId.isValid(farmerId) ||
-        !mongoose.Types.ObjectId.isValid(orderId)) {
-      return res.status(400).json({ message: 'Invalid IDs provided.' });
-    }
+    // Body is validated by addReviewBody: { orderId, rating, review }
+    const { orderId, rating, review } = req.body;
+    const buyerId = req.user.id;
 
     const order = await OrderHistory.findOne({
       _id: orderId,
@@ -27,6 +24,10 @@ export const addReview = async (req, res) => {
         message: 'You can only review products from valid orders.' 
       });
     }
+
+    // Farmer and product are taken from the buyer's own order, never from the request
+    const farmerId = order.farmerId;
+    const productName = order.productName;
 
     const existingReview = await Review.findOne({ orderId });
     if (existingReview) {
@@ -66,15 +67,15 @@ export const addReview = async (req, res) => {
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <h2 style="color: #4CAF50;">AgriWaste Management</h2>
-              <p>Dear ${buyer.name || 'Valued Customer'},</p>
+              <p>Dear ${escapeHtml(buyer.name || 'Valued Customer')},</p>
               
               <p>Thank you for submitting your review!</p>
               
               <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0;">
                 <h3 style="margin-top: 0;">Review Details</h3>
-                <p><strong>Product:</strong> ${productName}</p>
+                <p><strong>Product:</strong> ${escapeHtml(productName)}</p>
                 <p><strong>Rating:</strong> ${rating}/5</p>
-                <p><strong>Your Review:</strong> ${review}</p>
+                <p><strong>Your Review:</strong> ${escapeHtml(review)}</p>
                 <p><strong>Status:</strong> Pending Approval</p>
               </div>
               

@@ -57,8 +57,11 @@ export const SignUp = () => {
       return;
     }
 
+    // confirmPassword is checked above and is not part of the API contract
+    const { confirmPassword: _confirmPassword, ...registration } = user;
+
     apiService
-      .post("/api/auth/register", user)
+      .post("/api/auth/register", registration)
       .then(() => {
         toast.success(
           "Account created successfully. Please check your email to verify your account."
@@ -67,7 +70,7 @@ export const SignUp = () => {
       })
       .catch((error) => {
         console.error("Registration error:", error);
-        toast.error("Registration failed. Please try again.");
+        toast.error(error.response?.data?.msg || "Registration failed. Please try again.");
       })
       .finally(() => setLoading(false));
   };

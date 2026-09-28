@@ -338,8 +338,9 @@ export const Profile = () => {
       return;
     }
 
-    if (newPassword.length < 8) {
-      setPasswordError("Password must be at least 8 characters long");
+    // Same policy the server enforces (and the sign-up form uses)
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,128}$/.test(newPassword)) {
+      setPasswordError("Password must be at least 8 characters and include uppercase, lowercase, number and special character.");
       return;
     }
 
@@ -360,18 +361,18 @@ export const Profile = () => {
       );
 
       if (response.data.message === "Password changed successfully") {
-        toast.success("Password changed successfully");
         setShowPasswordChangeModal(false);
         setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
         setPasswordError("");
-        
-        // Fetch updated user data to get new security timestamp
-        const updatedUserResponse = await apiService.get(`/api/auth/searchUser/${userId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setLastSecurityUpdate(updatedUserResponse.data.lastSecurityUpdate);
+
+        // A password change revokes every session, this one included (V4 tokenVersion),
+        // so end it here and ask for a fresh login instead of calling the API with a dead token.
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        toast.success("Password changed successfully. Please log in again with your new password.");
+        navigate("/login");
       }
     } catch (error) {
       console.error(error);
@@ -412,19 +413,20 @@ export const Profile = () => {
 
       const response = await apiService.put(
         `${API_URL}/api/auth/updateUser/${userId}`,
-        updateDetails,
+        // Email is shown read-only and is not sent; only name and phone are editable
+        { name: updateDetails.name, phone: updateDetails.phone },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (response.data) {
-        setUser(response.data);
+        setUser((prev) => ({ ...prev, ...response.data.user }));
         toast.success("Profile updated successfully!");
         setShowUpdateDetailsModal(false);
       }
     } catch (error) {
       console.error(error);
       console.error("Error updating profile:", error);
-      toast.error("Failed to update profile");
+      toast.error(error.response?.data?.message || "Failed to update profile");
     } finally {
       setIsUpdatingDetails(false);
     }
